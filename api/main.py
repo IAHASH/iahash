@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from iahash.issuer import issue_document
@@ -18,6 +22,9 @@ class IssuePayload(BaseModel):
     modelo: str = "unknown"
     prompt_id: str | None = None
     subject_id: str | None = None
+
+
+WEB_DIR = Path(__file__).parent.parent / "web"
 
 
 @app.get("/health")
@@ -41,3 +48,17 @@ def issue(payload: IssuePayload):
 def verify(doc: IAHashDocument):
     valid, reason = verify_document(doc)
     return {"valid": valid, "reason": reason}
+
+
+# ---- Static web for the verifier ----
+
+@app.get("/", include_in_schema=False)
+def serve_index():
+    return FileResponse(WEB_DIR / "index.html")
+
+
+app.mount(
+    "/static",
+    StaticFiles(directory=WEB_DIR),
+    name="static",
+)
