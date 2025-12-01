@@ -69,17 +69,14 @@ IA-HASH is ideal for:
 
 ### **1. Normalize text**
 
-```python
 prompt_normalized = prompt.encode("utf-8")
 response_normalized = response.encode("utf-8")
+
 2. Hash both parts
-python
-Copiar código
 h_prompt   = SHA256(prompt_normalized)
 h_response = SHA256(response_normalized)
+
 3. Combine the hashes
-python
-Copiar código
 h_total = SHA256(
     version     + "|" +
     prompt_id   + "|" +
@@ -88,16 +85,16 @@ h_total = SHA256(
     model       + "|" +
     timestamp
 )
+
 4. Sign the total hash using Ed25519
-python
-Copiar código
+
 signature = sign(private_key, h_total)
+
 5. Bundle everything into a JSON IA-HASH Document
 This document can later be verified offline.
 
 📄 IA-HASH Document Example
-json
-Copiar código
+
 {
   "version": "IA-HASH-1",
   "prompt_id": "CV_v01",
@@ -114,30 +111,25 @@ Copiar código
   "issuer_id": "IAHASH-001",
   "issuer_url": "https://ia-hash.com/public-key.pem"
 }
+
 📦 Installation
-bash
-Copiar código
 git clone https://github.com/IAHASH/iahash
 cd iahash
 pip install -r requirements.txt
 Generate your keypair:
 
-bash
-Copiar código
+
 python scripts/generate_keys.py
 Issue a signed IA-HASH document:
 
-bash
-Copiar código
 python scripts/demo_issue_verify.py
+
 🔍 Verification
 Verify via Python:
-bash
-Copiar código
+
 python scripts/demo_issue_verify.py --verify
 Verify via API:
-bash
-Copiar código
+
 curl -X POST https://your-domain.com/verify \
   -H "Content-Type: application/json" \
   -d @document.json
@@ -150,8 +142,6 @@ https://your-domain.com/
 Paste the IA-HASH JSON → click Verify ✔
 
 🗂 Project Structure
-text
-Copiar código
 iahash/
   ├── crypto.py        # hashing + signing utilities
   ├── issuer.py        # create IA-HASH documents
@@ -173,6 +163,7 @@ web/
 Dockerfile
 start.sh
 requirements.txt
+
 🧬 Design Principles
 Open — fully transparent, Apache-2 licensed
 
