@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>IA-HASH Verifier</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="logo.png" alt="IA-HASH logo" class="logo" />
+      <h1>IA-HASH Verifier</h1>
+      <p>Paste an IA-HASH document (JSON) to verify its integrity and authenticity.</p>
+    </header>
+
+    <section>
+      <textarea id="input" placeholder="Paste IA-HASH JSON here"></textarea>
+      <button id="verifyBtn">Verify</button>
+    </section>
+
+    <section id="result" class="result"></section>
+  </div>
+
+  <script>
+    const btn = document.getElementById("verifyBtn");
+    const input = document.getElementById("input");
+    const result = document.getElementById("result");
+
+    btn.addEventListener("click", async () => {
+      result.textContent = "Verifying...";
+      try {
+        const payload = JSON.parse(input.value);
+        const res = await fetch("/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        result.textContent = `valid: ${data.valid}\nreason: ${data.reason}`;
+        result.className = "result " + (data.valid ? "ok" : "fail");
+      } catch (e) {
+        result.textContent = "Error: " + e.message;
+        result.className = "result fail";
+      }
+    });
+  </script>
+</body>
+</html>
