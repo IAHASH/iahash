@@ -9,6 +9,7 @@ from iahash.issuer import issue_document
 from iahash.verifier import verify_document
 from iahash.models import IAHashDocument
 
+
 app = FastAPI(
     title="IA-HASH API",
     version="0.1.0",
