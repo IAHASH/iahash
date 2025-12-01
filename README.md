@@ -194,4 +194,4 @@ Open Issues, Discussions, or Pull Requests at:
 Website: https://ia-hash.com
 Repository: https://github.com/IAHASH/iahash
 
-<p align="center"> Made with ❤️ and cryptographic rigor. </p> ```
+Made with ❤️ and cryptographic rigor.
