@@ -2,47 +2,468 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>IA-HASH Verifier</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <title>IA-HASH · Verify AI prompt–response pairs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="description"
+    content="IA-HASH is an open, model-agnostic standard to sign and verify AI-generated prompt–response pairs."
+  />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="container">
-    <header>
-      <img src="/static/logo.png" alt="IA-HASH logo" class="logo" />
-      <h1>IA-HASH Verifier</h1>
-      <p>Paste an IA-HASH document (JSON) to verify its integrity and authenticity.</p>
-    </header>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#hero" class="brand">
+        <img src="logo.png" alt="IA-HASH logo" class="brand-logo" />
+        <span class="brand-text">IA-HASH</span>
+      </a>
+      <nav class="nav">
+        <a href="#verify">Verify</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#use-cases">Use cases</a>
+        <a href="#master-prompts">Master Prompts</a>
+        <a href="#docs">Docs / Help</a>
+      </nav>
+    </div>
+  </header>
 
-    <section>
-      <textarea id="input" placeholder="Paste IA-HASH JSON here"></textarea>
-      <button id="verifyBtn">Verify</button>
+  <main>
+    <!-- HERO + VERIFIER -->
+    <section id="hero" class="hero">
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <h1>Trust that your AI really wrote this.</h1>
+          <p class="hero-lead">
+            IA-HASH is a lightweight, open standard to cryptographically verify
+            that a prompt–response pair truly comes from your AI – and hasn’t been
+            edited afterwards.
+          </p>
+          <ul class="hero-list">
+            <li>✔ Integrity of the prompt and the response</li>
+            <li>✔ Authenticity of the issuing AI / assistant</li>
+            <li>✔ Offline verification, years later</li>
+            <li>✔ No blockchain, no vendor lock-in</li>
+          </ul>
+          <p class="hero-sub">
+            Paste an IA-HASH document on the right and get a
+            <strong>ia-hash.com VERIFIED</strong> result in seconds.
+          </p>
+        </div>
+
+        <div id="verify" class="hero-card">
+          <h2>Verify an IA-HASH document</h2>
+          <p class="card-subtitle">
+            Paste the JSON document issued by your assistant or backend.
+          </p>
+
+          <form id="verify-form" class="verify-form">
+            <label for="iah-json-input" class="field-label">
+              IA-HASH JSON
+            </label>
+            <textarea
+              id="iah-json-input"
+              class="field-textarea"
+              rows="14"
+              spellcheck="false"
+              placeholder='{
+  "version": "IA-HASH-1",
+  "prompt_id": "CV_v01",
+  "prompt_description": "Write the most honest CV about the user...",
+  "response": "Here goes the AI-generated output...",
+  "model": "gpt-5.1-thinking",
+  "timestamp": "2025-01-01T15:32:11Z",
+  "subject": "manu_cabral",
+  "h_prompt": "df91fae23a...",
+  "h_response": "a01bcd5521...",
+  "h_total": "9e0041aa0c...",
+  "issuer_id": "IAHASH-001",
+  "issuer_url": "https://ia-hash.com/public-key.pem",
+  "signature": "..."
+}'
+            ></textarea>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Verify IA-HASH</button>
+              <button type="button" id="clear-btn" class="btn btn-ghost">
+                Clear
+              </button>
+            </div>
+          </form>
+
+          <div id="result" class="verify-result verify-result--idle">
+            <div id="result-badge" class="verify-badge">
+              <span class="badge-dot"></span>
+              <span id="result-title">Waiting for a document…</span>
+            </div>
+            <p id="result-message" class="result-message">
+              Paste a valid IA-HASH JSON document and click “Verify IA-HASH”.
+            </p>
+            <details class="result-details">
+              <summary>Raw verification response</summary>
+              <pre id="result-raw" class="result-raw">
+(no response yet)
+              </pre>
+            </details>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <section id="result" class="result"></section>
-  </div>
+    <!-- HOW IT WORKS -->
+    <section id="how-it-works" class="section">
+      <div class="container">
+        <h2>How IA-HASH works</h2>
+        <p class="section-lead">
+          Under the hood, IA-HASH is a simple combination of hashing and digital
+          signatures, designed to stay verifiable forever.
+        </p>
+
+        <div class="steps-grid">
+          <div class="step-card">
+            <span class="step-number">1</span>
+            <h3>Normalize the text</h3>
+            <p>
+              Take the exact <strong>prompt</strong> and <strong>response</strong> as
+              UTF-8 strings. No hidden changes, no formatting tricks.
+            </p>
+          </div>
+          <div class="step-card">
+            <span class="step-number">2</span>
+            <h3>Hash prompt and response</h3>
+            <p>
+              Compute <code>SHA256(prompt)</code> and <code>SHA256(response)</code>.
+              These hashes uniquely represent the content.
+            </p>
+          </div>
+          <div class="step-card">
+            <span class="step-number">3</span>
+            <h3>Combine and sign</h3>
+            <p>
+              Combine metadata (version, prompt_id, model, timestamp, hashes…)
+              into <code>h_total</code> and sign it with your Ed25519 private key.
+            </p>
+          </div>
+          <div class="step-card">
+            <span class="step-number">4</span>
+            <h3>Issue the IA-HASH document</h3>
+            <p>
+              Bundle everything into a JSON IA-HASH document and store, send or
+              embed it wherever you need trustable AI output.
+            </p>
+          </div>
+          <div class="step-card">
+            <span class="step-number">5</span>
+            <h3>Verify anywhere, anytime</h3>
+            <p>
+              Anyone with the document and your public key can verify the hashes
+              and signature – offline, years later.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- USE CASES -->
+    <section id="use-cases" class="section section-alt">
+      <div class="container">
+        <h2>What IA-HASH is great for</h2>
+        <p class="section-lead">
+          Any situation where “the AI said this” must be verifiable and auditable.
+        </p>
+
+        <div class="cards-grid">
+          <article class="card">
+            <h3>Verified AI CVs</h3>
+            <p>
+              Issue an IA-HASH document alongside a CV generated by your assistant,
+              proving that the content has not been edited by third parties.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>Psychological &amp; personality assessments</h3>
+            <p>
+              Lock in the exact prompt and AI assessment used in recruiting or
+              coaching processes, for future audit or appeal.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>Technical evaluations &amp; scoring</h3>
+            <p>
+              Guarantee that coding challenges, grading rubrics and AI feedback
+              were produced under controlled prompts and models.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>Reports, summaries &amp; audits</h3>
+            <p>
+              Attach a signed IA-HASH document to critical AI-generated reports:
+              financial notes, legal drafts, security analyses…
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>Education &amp; training</h3>
+            <p>
+              Keep a verifiable trail of AI feedback, corrections and personalized
+              learning paths for students or employees.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>Personal AI assistants</h3>
+            <p>
+              Optionally sign diaries, reflections, or important decisions produced
+              by your personal assistant, without exposing raw data.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- MASTER PROMPTS -->
+    <section id="master-prompts" class="section">
+      <div class="container">
+        <h2>Master Prompts library (examples)</h2>
+        <p class="section-lead">
+          IA-HASH pairs beautifully with a curated set of “Master Prompts”.
+          Each prompt can have its own <code>prompt_id</code> and rules.
+        </p>
+
+        <div class="cards-grid">
+          <article class="card">
+            <h3>CV · Honest, deep profile</h3>
+            <p>
+              <strong>prompt_id:</strong> <code>CV_v01</code><br />
+              Generates the most honest and detailed CV for the subject, including
+              skills, gaps, learning paths and real experience.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>Psychological snapshot</h3>
+            <p>
+              <strong>prompt_id:</strong> <code>PSY_PROFILE_v01</code><br />
+              Structured reflection on personality, motivations and blind spots,
+              based on long-term conversation history.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>Technical skills map</h3>
+            <p>
+              <strong>prompt_id:</strong> <code>TECH_MAP_v01</code><br />
+              Evaluates technical skills, systems-thinking and real problem-solving
+              abilities for a given role.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>Custom prompts registry</h3>
+            <p>
+              Your own Master Prompts catalogue can live in your backend, each with
+              its own <code>prompt_id</code> and policy, all signed with IA-HASH.
+            </p>
+          </article>
+        </div>
+
+        <p class="hint">
+          In future versions, this section can connect directly to your own
+          Master Prompts API so users can select a prompt and see its latest
+          definition before issuing an IA-HASH document.
+        </p>
+      </div>
+    </section>
+
+    <!-- DOCS / HELP -->
+    <section id="docs" class="section section-alt">
+      <div class="container">
+        <h2>Docs / Help (minimal)</h2>
+
+        <div class="docs-grid">
+          <article class="doc-block">
+            <h3>1. Install and generate keys</h3>
+            <ol>
+              <li><code>git clone https://github.com/IAHASH/iahash</code></li>
+              <li><code>cd iahash</code></li>
+              <li><code>pip install -r requirements.txt</code></li>
+              <li><code>python scripts/generate_keys.py</code></li>
+            </ol>
+            <p>
+              This creates an Ed25519 keypair to sign IA-HASH documents from your
+              assistant or backend.
+            </p>
+          </article>
+
+          <article class="doc-block">
+            <h3>2. Issue an IA-HASH document (backend / CLI)</h3>
+            <p>
+              Use the Python utilities to create an IA-HASH document for a given
+              prompt–response pair:
+            </p>
+            <pre class="code-snippet">
+python scripts/demo_issue_verify.py
+            </pre>
+            <p>
+              In your own system, call the issuer module after every important
+              prompt–response pair and store or send the resulting JSON.
+            </p>
+          </article>
+
+          <article class="doc-block">
+            <h3>3. Verify via API</h3>
+            <pre class="code-snippet">
+curl -X POST https://your-domain.com/verify \
+  -H "Content-Type: application/json" \
+  -d @document.json
+            </pre>
+            <p>
+              The API returns a JSON verdict you can log or attach to your own
+              records.
+            </p>
+          </article>
+
+          <article class="doc-block">
+            <h3>4. Verify via this web UI</h3>
+            <ol>
+              <li>Paste the IA-HASH JSON in the box at the top.</li>
+              <li>Click <strong>“Verify IA-HASH”</strong>.</li>
+              <li>
+                If everything matches, you’ll see the
+                <strong>ia-hash.com VERIFIED</strong> badge and details.
+              </li>
+            </ol>
+          </article>
+        </div>
+
+        <p class="hint">
+          IA-HASH is Apache 2.0 licensed. You can run this verifier on your own
+          domain, behind your own keys, and integrate it with any AI model
+          (hosted or local).
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-left">
+        <span class="brand-text">IA-HASH</span>
+        <span class="footer-divider">·</span>
+        <span>Open, model-agnostic verification for AI output.</span>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">
+          GitHub repo
+        </a>
+        <span class="footer-divider">·</span>
+        <span>Apache-2.0</span>
+      </div>
+    </div>
+  </footer>
 
   <script>
-    const btn = document.getElementById("verifyBtn");
-    const input = document.getElementById("input");
-    const result = document.getElementById("result");
+    (function () {
+      const form = document.getElementById("verify-form");
+      const input = document.getElementById("iah-json-input");
+      const clearBtn = document.getElementById("clear-btn");
 
-    btn.addEventListener("click", async () => {
-      result.textContent = "Verifying...";
-      try {
-        const payload = JSON.parse(input.value);
-        const res = await fetch("/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        result.textContent = `valid: ${data.valid}\nreason: ${data.reason}`;
-        result.className = "result " + (data.valid ? "ok" : "fail");
-      } catch (e) {
-        result.textContent = "Error: " + e.message;
-        result.className = "result fail";
+      const resultBox = document.getElementById("result");
+      const resultBadge = document.getElementById("result-badge");
+      const resultTitle = document.getElementById("result-title");
+      const resultMessage = document.getElementById("result-message");
+      const resultRaw = document.getElementById("result-raw");
+
+      function setStateIdle() {
+        resultBox.className = "verify-result verify-result--idle";
+        resultTitle.textContent = "Waiting for a document…";
+        resultMessage.textContent =
+          "Paste a valid IA-HASH JSON document and click “Verify IA-HASH”.";
+        resultRaw.textContent = "(no response yet)";
       }
-    });
+
+      function setStateLoading() {
+        resultBox.className = "verify-result verify-result--loading";
+        resultTitle.textContent = "Verifying IA-HASH document…";
+        resultMessage.textContent = "Contacting /verify endpoint.";
+        resultRaw.textContent = "(awaiting response)";
+      }
+
+      function setStateError(msg) {
+        resultBox.className = "verify-result verify-result--error";
+        resultTitle.textContent = "Verification error";
+        resultMessage.textContent = msg;
+      }
+
+      function setStateSuccess(isValid, data) {
+        if (isValid) {
+          resultBox.className = "verify-result verify-result--ok";
+          resultTitle.textContent = "ia-hash.com VERIFIED";
+          resultMessage.textContent =
+            "The IA-HASH document is valid and the signature matches the public key.";
+        } else {
+          resultBox.className = "verify-result verify-result--fail";
+          resultTitle.textContent = "NOT VERIFIED";
+          resultMessage.textContent =
+            "The IA-HASH document could not be verified. Check hashes, signature and metadata.";
+        }
+
+        try {
+          resultRaw.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          resultRaw.textContent = String(data);
+        }
+      }
+
+      form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        let doc;
+        try {
+          doc = JSON.parse(input.value);
+        } catch (err) {
+          setStateError("Invalid JSON. Please paste a valid IA-HASH document.");
+          resultRaw.textContent = String(err);
+          return;
+        }
+
+        setStateLoading();
+
+        try {
+          const res = await fetch("/verify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(doc),
+          });
+
+          const data = await res.json();
+
+          // Try to infer a "valid" flag from the API response.
+          const isValid =
+            (typeof data.valid === "boolean" && data.valid) ||
+            (typeof data.ok === "boolean" && data.ok) ||
+            data.status === "valid" ||
+            data.verified === true;
+
+          setStateSuccess(Boolean(isValid), data);
+        } catch (err) {
+          setStateError("Network or server error while calling /verify.");
+          resultRaw.textContent = String(err);
+        }
+      });
+
+      clearBtn.addEventListener("click", function () {
+        input.value = "";
+        setStateIdle();
+      });
+
+      // Initial state
+      setStateIdle();
+    })();
   </script>
 </body>
 </html>
