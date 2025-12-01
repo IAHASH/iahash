@@ -1,19 +1,13 @@
+# iahash/models.py
+
 from pydantic import BaseModel
+from typing import Optional
 
-
-class IAHashDocument(BaseModel):
-    version: str = "IA-HASH-1"
-    prompt_id: str | None = None
-    prompt_maestro: str
-    respuesta: str
-    modelo: str
-    timestamp: str
-    subject_id: str | None = None
-
-    h_prompt: str
-    h_respuesta: str
-    h_total: str
-    firma_total: str
-
-    issuer_id: str = "ia-hash.com"
-    issuer_pk_url: str | None = None
+class IssueFromTextRequest(BaseModel):
+    prompt: str
+    response: str
+    prompt_id: Optional[str] = None
+    prompt_description: Optional[str] = None
+    model: Optional[str] = None
+    subject: Optional[str] = None
+    
