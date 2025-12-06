@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class IAHashDocument(BaseModel):
-    version: str = "IA-HASH-1"
+    version: str = "IAHASH-1"
     prompt_id: str | None = None
     prompt_maestro: str
     respuesta: str
