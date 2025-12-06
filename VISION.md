@@ -309,3 +309,7 @@ Es un estándar para humanos.
 Para sistemas.
 Para empresas.
 Para la historia.
+
+“Futuro y escalabilidad”
+
+“IA-HASH podrá integrarse con sistemas más avanzados de confianza —como cadenas de firma, identidades de modelos, o protocolos de mensajería firmada entre agentes— pero siempre bajo la filosofía central del estándar: simplicidad, verificabilidad humana, universalidad y baja fricción.”
