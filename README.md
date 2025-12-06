@@ -21,19 +21,29 @@
 
 **IAHash** is an open, lightweight, future-proof protocol that allows anyone to *cryptographically verify* that:
 
-✔ A prompt was not modified  
-✔ A response was not modified  
-✔ The output truly comes from the issuing AI (or assistant)  
-✔ Verification is possible offline, years later, without contacting the issuer  
+✔ A prompt was not modified
+✔ A response was not modified
+✔ The output truly comes from the issuing AI (or assistant)
+✔ Verification is possible offline, years later, without contacting the issuer
 
 All without depending on:
 
-❌ Blockchain  
-❌ Closed AI providers  
-❌ Proprietary SDKs  
-❌ Vendor lock-in  
+❌ Blockchain
+❌ Closed AI providers
+❌ Proprietary SDKs
+❌ Vendor lock-in
 
 **IAHash = integrity + authenticity + auditability + reproducibility**.
+
+## 🔒 Prompt + Response verification model
+
+IAHash garantiza que cada pareja **prompt + respuesta** sea trazable y verificable en cualquier momento:
+
+- **Identificador único por usuario**. Cada emisión puede llevar `prompt_id`, `subject_id` y `conversation_id` (para hilos compartidos) que permiten relacionar el hash con un registro en tu base de datos SQL sin exponer datos sensibles.
+- **Hash único y estable**. El hash total (`h_total`) se calcula con los hashes normalizados del prompt y la respuesta, más metadatos (`version | prompt_id | h_prompt | h_respuesta | modelo | timestamp`). Cualquier cambio rompe la verificación.
+- **Firmado con Ed25519**. La firma (`firma_total`) se valida con la clave pública que sirve el backend (`/api/public-key`), de modo que un tercero puede verificar la autenticidad offline.
+- **Verificación contra el chat original**. Cuando exista un enlace compartido de ChatGPT (`https://chatgpt.com/share/...`), el verificador puede recuperar el prompt/respuesta del enlace, normalizarlo y comprobar que coincida con lo registrado en tu DB y en el documento IA-HASH.
+- **Persistencia y auditoría**. Los registros pueden almacenarse en tu SQL (por ejemplo, tabla `prompts`) junto con el `conversation_id` o la URL compartida para trazabilidad futura.
 
 ---
 
@@ -163,6 +173,8 @@ web/
 Dockerfile
 start.sh
 requirements.txt
+docs/
+  └── VERIFICATION.md   # Flujo de verificación end-to-end (prompt + respuesta + chat compartido)
 
 🧬 Design Principles
 Open — fully transparent, Apache-2 licensed

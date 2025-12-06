@@ -2,3 +2,5 @@ fastapi
 uvicorn[standard]
 cryptography
 pydantic
+pytest
+httpx
