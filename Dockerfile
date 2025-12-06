@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Minimal build tools for cryptography + curl for healthcheck
 RUN apt-get update \
- && apt-get install -y --no-install-recommends build-essential curl \
+ && apt-get install -y --no-install-recommends build-essential curl sqlite3 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY iahash ./iahash
 COPY api ./api
-COPY scripts ./scripts
 COPY web ./web
+COPY db ./db
 COPY docs ./docs
 COPY start.sh README.md ./
 

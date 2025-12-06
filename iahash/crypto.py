@@ -1,9 +1,19 @@
+"""Cryptographic primitives for IA-HASH v1.2.
+
+Responsibilities:
+- Text normalisation according to PROTOCOL_1.2.
+- SHA256 hashing helpers.
+- Ed25519 signing and verification.
+- Base58 encoding used for iah_id generation.
+"""
+
 from __future__ import annotations
 
-from pathlib import Path
+import base64
 import hashlib
-import re
 import unicodedata
+from pathlib import Path
+from typing import Optional
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -11,85 +21,88 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 
+KEY_DIR = Path("/data/keys")
+PRIVATE_KEY_NAME = "issuer_ed25519.private"
+PUBLIC_KEY_NAME = "issuer_ed25519.pub"
 
-INVISIBLE_CHARS = [
-    "\u200b",  # zero width space
-    "\ufeff",  # zero width no-break space
-    "\u200c",  # zero width non-joiner
-    "\u200d",  # zero width joiner
-    "\u2060",  # word joiner
-]
+# Bitcoin base58 alphabet
+BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 
-def normalise(text: str) -> bytes:
-    """Normalise text using the IHS-1 ruleset.
+def normalize_text(text: str) -> bytes:
+    """Normalize text according to IA-HASH v1.2 rules.
 
     Steps:
-    - Unicode NFC normalisation
+    - Unicode NFC cleanup
     - Replace CRLF/CR with LF
-    - Remove zero-width characters and non-breaking spaces
-    - Collapse internal whitespace to single spaces per line
-    - Trim leading/trailing whitespace and empty lines
+    - Trim trailing whitespace on each line
+    - Remove trailing blank lines
     - Encode as UTF-8 bytes
     """
 
-    # Unicode normalisation
-    normalised = unicodedata.normalize("NFC", text or "")
-
-    # Standardise newlines
-    normalised = normalised.replace("\r\n", "\n").replace("\r", "\n")
-
-    # Remove invisibles and NBSP
-    for ch in INVISIBLE_CHARS:
-        normalised = normalised.replace(ch, "")
-    normalised = normalised.replace("\xa0", " ")
-
-    # Collapse whitespace per line
-    lines = [re.sub(r"\s+", " ", line).strip() for line in normalised.split("\n")]
-    # Remove leading/trailing empty lines after trimming
-    while lines and not lines[0]:
-        lines.pop(0)
-    while lines and not lines[-1]:
+    if text is None:
+        text = ""
+    normalized = unicodedata.normalize("NFC", text)
+    normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.rstrip() for line in normalized.split("\n")]
+    while lines and lines[-1] == "":
         lines.pop()
+    normalized = "\n".join(lines)
+    return normalized.encode("utf-8")
 
-    collapsed = "\n".join(lines)
-    return collapsed.encode("utf-8")
 
-
-def sha256_hex(data: bytes) -> str:
-    """Return the SHA256 digest of ``data`` as a hex string."""
-
+def sha256_hex(data: bytes | str) -> str:
+    if isinstance(data, str):
+        data = data.encode("utf-8")
     return hashlib.sha256(data).hexdigest()
 
 
-def load_private_key(path: str | Path) -> Ed25519PrivateKey:
-    """Load an Ed25519 private key from PEM."""
+def encode_base58(data: bytes) -> str:
+    """Encode bytes into a base58 string without external deps."""
 
-    path = Path(path)
-    with path.open("rb") as handle:
-        return serialization.load_pem_private_key(handle.read(), password=None)
-
-
-def load_public_key(path: str | Path) -> Ed25519PublicKey:
-    """Load an Ed25519 public key from PEM."""
-
-    path = Path(path)
-    with path.open("rb") as handle:
-        return serialization.load_pem_public_key(handle.read())
-
-
-def sign_hex(h_total: str, sk: Ed25519PrivateKey) -> str:
-    """Sign the UTF-8 encoded ``h_total`` and return the signature as hex."""
-
-    signature = sk.sign(h_total.encode("utf-8"))
-    return signature.hex()
+    if not data:
+        return ""
+    num = int.from_bytes(data, "big")
+    encoded = ""
+    while num > 0:
+        num, rem = divmod(num, 58)
+        encoded = BASE58_ALPHABET[rem] + encoded
+    # handle leading zeros
+    padding = 0
+    for b in data:
+        if b == 0:
+            padding += 1
+        else:
+            break
+    return (BASE58_ALPHABET[0] * padding) + encoded
 
 
-def verify_signature_hex(h_total: str, sig_hex: str, pk: Ed25519PublicKey) -> bool:
-    """Verify that ``sig_hex`` matches ``h_total`` for the provided public key."""
+def load_private_key(path: Optional[Path] = None) -> Ed25519PrivateKey:
+    key_path = path or KEY_DIR / PRIVATE_KEY_NAME
+    data = key_path.read_bytes()
+    return serialization.load_pem_private_key(data, password=None)
 
+
+def load_public_key(path: Optional[Path] = None) -> Ed25519PublicKey:
+    key_path = path or KEY_DIR / PUBLIC_KEY_NAME
+    data = key_path.read_bytes()
+    return serialization.load_pem_public_key(data)
+
+
+def sign_message(message: bytes, key_path: Optional[Path] = None) -> str:
+    private_key = load_private_key(key_path)
+    signature = private_key.sign(message)
+    return base64.b64encode(signature).decode("ascii")
+
+
+def verify_signature(message: bytes, signature_b64: str, public_key: Ed25519PublicKey) -> bool:
     try:
-        pk.verify(bytes.fromhex(sig_hex), h_total.encode("utf-8"))
+        public_key.verify(base64.b64decode(signature_b64), message)
+        return True
     except Exception:
         return False
-    return True
+
+
+def derive_iah_id(h_total: str) -> str:
+    digest = hashlib.sha256(h_total.encode("utf-8")).digest()
+    return encode_base58(digest)[:16]

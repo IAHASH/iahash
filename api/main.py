@@ -1,150 +1,184 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi.templating import Jinja2Templates
 
-from iahash.issuer import issue_document
-from iahash.models import IAHashDocument, IssueFromTextRequest, LLMID
-from iahash.paths import public_key_path
-from iahash.prompts import (
-    MasterPrompt,
-    MasterPromptSummary,
-    get_master_prompt,
-    list_master_prompts,
-    save_custom_prompt,
+from iahash.db import (
+    get_iah_document_by_id,
+    get_prompt_by_slug,
+    get_sequence_by_slug,
+    list_prompts,
+    list_sequences,
 )
-from iahash.verifier import verify_document
+from iahash.extractors import extract_chatgpt_share
+from iahash.issuer import issue_conversation, issue_pair
+from iahash.models import (
+    CheckerRequest,
+    ConversationVerificationRequest,
+    PairVerificationRequest,
+)
+from iahash.verifier import VerificationStatus, verify_document
 
-WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+BASE_DIR = Path(__file__).resolve().parent.parent
+WEB_DIR = BASE_DIR / "web"
+TEMPLATES = Jinja2Templates(directory=WEB_DIR / "templates")
+
+app = FastAPI(title="IA-HASH v1.2", docs_url=None, redoc_url=None)
+app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
+app.mount("/docs", StaticFiles(directory=BASE_DIR / "docs"), name="docs")
 
 
-class VerifyResponse(BaseModel):
-    valid: bool
-    reason: str
+@app.get("/keys/issuer_ed25519.pub", include_in_schema=False)
+def public_key_file():
+    key_path = Path("/data/keys/issuer_ed25519.pub")
+    if not key_path.exists():
+        raise HTTPException(status_code=404, detail="Public key not found")
+    return FileResponse(key_path)
 
 
-class IssuePayload(IssueFromTextRequest):
-    prompt_maestro: str = Field(..., description="Texto exacto enviado a la IA")
-    respuesta: str = Field(..., description="Respuesta completa devuelta por la IA")
-    modelo: str | None = Field(None, description="Modelo utilizado: gpt-5, claude-3, etc.")
-    llmid: LLMID | None = None
-    contexto: str | None = Field(None, description="Contexto adicional a normalizar")
-    metadata: dict = Field(default_factory=dict)
-
-
-class MasterPromptCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str = Field(..., description="Identificador estable (PROMPT-ID)")
-    title: str
-    version: str
-    language: str = "es"
-    category: str | None = None
-    description: str | None = None
-    body: str
-    metadata: dict = Field(default_factory=dict)
-    prompt_hash: str | None = Field(
-        default=None,
-        description="Hash opcional si ya está calculado. Si falta, se calcula automáticamente.",
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def home(request: Request):
+    prompts = list_prompts()
+    sequences = list_sequences()
+    return TEMPLATES.TemplateResponse(
+        "index.html",
+        {"request": request, "prompts": prompts, "sequences": sequences},
     )
 
 
-def ensure_public_key(path: Path = public_key_path()) -> Path:
-    if not path.exists():
-        raise HTTPException(status_code=500, detail="Public key not found. Generate keys first.")
-    return path
+@app.get("/prompts", response_class=HTMLResponse, include_in_schema=False)
+def prompts_page(request: Request):
+    prompts = list_prompts()
+    return TEMPLATES.TemplateResponse("prompts.html", {"request": request, "prompts": prompts})
 
 
-app = FastAPI(
-    title="IA-HASH API",
-    description="Issue and verify IA-HASH documents (Prompt + Response → Verifiable).",
-    version="0.3.0",
-    contact={"name": "IA-HASH", "url": "https://github.com/IAHASH/iahash"},
-    license_info={"name": "Apache-2.0", "url": "https://www.apache.org/licenses/LICENSE-2.0"},
-    openapi_tags=[{"name": "IA-HASH", "description": "Issue and verify IA-HASH documents."}],
-)
-
-
-@app.get("/health", tags=["IA-HASH"], summary="Healthcheck")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.post("/issue", response_model=IAHashDocument, tags=["IA-HASH"], summary="Emitir IA-HASH")
-def issue(payload: IssuePayload) -> IAHashDocument:
-    doc = issue_document(
-        prompt_text=payload.prompt_maestro,
-        respuesta_text=payload.respuesta,
-        modelo=payload.modelo,
-        prompt_id=payload.prompt_id,
-        subject=payload.subject,
-        conversation_id=payload.conversation_id,
-        llmid=payload.llmid,
-        metadata=payload.metadata,
-        contexto=payload.contexto,
-    )
-    return doc
-
-
-@app.post("/verify", response_model=VerifyResponse, tags=["IA-HASH"], summary="Verificar IA-HASH")
-def verify(doc: IAHashDocument) -> VerifyResponse:
-    valid, reason = verify_document(doc)
-    return VerifyResponse(valid=valid, reason=reason)
-
-
-@app.get(
-    "/public-key",
-    summary="Obtener clave pública",
-    response_class=PlainTextResponse,
-    responses={200: {"description": "PEM"}},
-    tags=["IA-HASH"],
-)
-def public_key(path: Annotated[Path, Depends(ensure_public_key)]) -> str:
-    return path.read_text()
-
-
-@app.get(
-    "/master-prompts",
-    tags=["IA-HASH"],
-    summary="Listado de prompts maestros",
-    response_model=list[MasterPromptSummary],
-)
-def master_prompts() -> list[MasterPromptSummary]:
-    return list_master_prompts()
-
-
-@app.get(
-    "/master-prompts/{prompt_id}",
-    tags=["IA-HASH"],
-    summary="Detalle de prompt maestro incluyendo hash",
-    response_model=MasterPrompt,
-)
-def master_prompt_detail(prompt_id: str) -> MasterPrompt:
-    prompt = get_master_prompt(prompt_id)
+@app.get("/prompts/{slug}", response_class=HTMLResponse, include_in_schema=False)
+def prompt_detail_page(slug: str, request: Request):
+    prompt = get_prompt_by_slug(slug)
     if not prompt:
-        raise HTTPException(status_code=404, detail="Prompt maestro no encontrado")
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return TEMPLATES.TemplateResponse("prompt_detail.html", {"request": request, "prompt": prompt})
+
+
+@app.get("/verify", response_class=HTMLResponse, include_in_schema=False)
+def verify_page(request: Request):
+    prompts = list_prompts()
+    return TEMPLATES.TemplateResponse("verify.html", {"request": request, "prompts": prompts})
+
+
+@app.get("/sequences", response_class=HTMLResponse, include_in_schema=False)
+def sequences_page(request: Request):
+    sequences = list_sequences()
+    return TEMPLATES.TemplateResponse("sequences.html", {"request": request, "sequences": sequences})
+
+
+@app.get("/sequences/{slug}", response_class=HTMLResponse, include_in_schema=False)
+def sequence_detail_page(slug: str, request: Request):
+    sequence = get_sequence_by_slug(slug)
+    if not sequence:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    return TEMPLATES.TemplateResponse("sequence_detail.html", {"request": request, "sequence": sequence})
+
+
+@app.get("/compare", response_class=HTMLResponse, include_in_schema=False)
+def compare_page(request: Request):
+    prompts = list_prompts()
+    return TEMPLATES.TemplateResponse("compare.html", {"request": request, "prompts": prompts})
+
+
+@app.get("/docs", response_class=HTMLResponse, include_in_schema=False)
+def docs_page(request: Request):
+    return TEMPLATES.TemplateResponse("docs.html", {"request": request})
+
+
+@app.get("/account", response_class=HTMLResponse, include_in_schema=False)
+def account_page(request: Request):
+    return TEMPLATES.TemplateResponse("account.html", {"request": request})
+
+
+@app.get("/iah/{iah_id}", response_class=HTMLResponse, include_in_schema=False)
+def iah_public_page(iah_id: str, request: Request):
+    document = get_iah_document_by_id(iah_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="IA-HASH not found")
+    return TEMPLATES.TemplateResponse("docs.html", {"request": request, "iah": document})
+
+
+# --- API endpoints (protocol) ---
+
+
+@app.post("/api/verify/pair")
+def api_verify_pair(payload: PairVerificationRequest):
+    document = issue_pair(
+        prompt_text=payload.prompt_text,
+        response_text=payload.response_text,
+        prompt_id=payload.prompt_id,
+        model=payload.model,
+        subject_id=payload.subject_id,
+        store_raw=payload.store_raw,
+    )
+    return {"status": VerificationStatus.VALID, "document": document}
+
+
+@app.post("/api/verify/conversation")
+def api_verify_conversation(payload: ConversationVerificationRequest):
+    extraction = extract_chatgpt_share(payload.url)
+    if extraction.get("error"):
+        return JSONResponse({"status": extraction["error"], "message": "Unable to process conversation"}, status_code=400)
+
+    document = issue_conversation(
+        prompt_text=extraction["prompt_text"],
+        response_text=extraction["response_text"],
+        prompt_id=payload.prompt_id,
+        model=payload.model_override or extraction.get("model", "unknown"),
+        conversation_url=extraction.get("conversation_url", payload.url),
+        provider=extraction.get("provider", "chatgpt"),
+        store_raw=payload.store_raw,
+    )
+    return {"status": VerificationStatus.VALID, "document": document}
+
+
+@app.post("/api/check")
+def api_check(payload: CheckerRequest):
+    result = verify_document(payload.document)
+    return result
+
+
+@app.get("/api/iah/{iah_id}")
+def api_get_iah(iah_id: str):
+    document = get_iah_document_by_id(iah_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="IA-HASH not found")
+    # Do not expose raw contents by default
+    document_filtered = {k: v for k, v in document.items() if not k.startswith("raw_") or document.get("store_raw")}
+    return document_filtered
+
+
+@app.get("/api/prompts")
+def api_prompts():
+    return {"prompts": list_prompts()}
+
+
+@app.get("/api/prompts/{slug}")
+def api_prompt_detail(slug: str):
+    prompt = get_prompt_by_slug(slug)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
     return prompt
 
 
-@app.post(
-    "/master-prompts",
-    tags=["IA-HASH"],
-    summary="Crear o actualizar un prompt maestro",
-    status_code=201,
-    response_model=MasterPrompt,
-)
-def master_prompt_create(payload: MasterPromptCreate) -> MasterPrompt:
-    return save_custom_prompt(payload.model_dump())
+@app.get("/api/sequences")
+def api_sequences():
+    return {"sequences": list_sequences()}
 
 
-@app.get("/", include_in_schema=False)
-def serve_index():
-    return FileResponse(WEB_DIR / "index.html")
-
-
-app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+@app.get("/api/sequences/{slug}")
+def api_sequence_detail(slug: str):
+    sequence = get_sequence_by_slug(slug)
+    if not sequence:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    return sequence

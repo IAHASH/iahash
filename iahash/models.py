@@ -1,62 +1,94 @@
+"""Pydantic models shared across the IA-HASH v1.2 stack."""
+
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
-class LLMID(BaseModel):
-    """Extended identity for the model that generated the output."""
+class Prompt(BaseModel):
+    id: int
+    slug: str
+    owner_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    full_prompt: Optional[str] = None
+    category: Optional[str] = None
+    is_master: bool = True
+    visibility: str = "public"
+    h_public: Optional[str] = None
+    h_secret: Optional[str] = None
+    signature_prompt: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
-    model_config = ConfigDict(extra="forbid")
 
-    name: str
-    version: Optional[str] = None
-    provider: Optional[str] = None
-    build_id: Optional[str] = None
-    params: dict = Field(default_factory=dict)
+class PromptSummary(BaseModel):
+    slug: str
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
 
 
 class IAHashDocument(BaseModel):
-    """Canonical IA-HASH document schema."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    version: str = "IAHASH-1"
-    prompt_id: Optional[str] = None
-    prompt_maestro: str
-    respuesta: str
-    modelo: str = "unknown"
+    protocol_version: str = Field(default="IAHASH-1.2")
+    type: str
+    mode: str
+    prompt_id: Optional[str]
+    prompt_hmac_verified: bool
     timestamp: str
-    subject: Optional[str] = None
-    conversation_id: Optional[str] = Field(
-        default=None,
-        description="Optional conversation identifier for multi-turn exchanges.",
-    )
-    llmid: Optional[LLMID] = Field(default=None, description="Extended model identity")
-    metadata: dict = Field(default_factory=dict)
-
+    model: str
     h_prompt: str
-    h_respuesta: str
-    h_contexto: str
+    h_response: str
     h_total: str
-    firma_total: str
+    signature: str
+    issuer_id: str
+    issuer_pk_url: str
+    conversation_url: Optional[str] = None
+    provider: Optional[str] = None
+    subject_id: Optional[str] = None
+    store_raw: bool = False
+    raw_prompt_text: Optional[str] = None
+    raw_response_text: Optional[str] = None
+    iah_id: str
 
-    issuer_id: str = "iahash.com"
-    issuer_pk_url: Optional[str] = None
+
+class SequenceStep(BaseModel):
+    id: int
+    position: int
+    title: str
+    description: Optional[str] = None
+    prompt_id: Optional[int] = None
+    prompt_slug: Optional[str] = None
 
 
-class IssueFromTextRequest(BaseModel):
-    """Input payload for issuing an IA-HASH document directly from raw text."""
+class Sequence(BaseModel):
+    id: int
+    slug: str
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    visibility: str = "public"
+    created_at: Optional[str] = None
+    steps: List[SequenceStep] = Field(default_factory=list)
 
-    model_config = ConfigDict(extra="forbid")
 
-    prompt_maestro: str
-    respuesta: str
-    modelo: Optional[str] = None
+class PairVerificationRequest(BaseModel):
+    prompt_text: str
+    response_text: str
     prompt_id: Optional[str] = None
-    subject: Optional[str] = None
-    conversation_id: Optional[str] = None
-    llmid: Optional[LLMID] = None
-    contexto: Optional[str] = Field(default=None, description="Context string to bind")
-    metadata: dict = Field(default_factory=dict)
+    model: str = "unknown"
+    subject_id: Optional[str] = None
+    store_raw: bool = False
+
+
+class ConversationVerificationRequest(BaseModel):
+    prompt_id: Optional[str] = None
+    url: str
+    model_override: Optional[str] = None
+    store_raw: bool = False
+
+
+class CheckerRequest(BaseModel):
+    document: Dict[str, Any]

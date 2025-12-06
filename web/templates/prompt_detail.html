@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="card">
+    <span class="badge">{{ prompt.category or 'general' }}</span>
+    <h2>{{ prompt.title }}</h2>
+    <p class="muted">{{ prompt.description }}</p>
+    <div class="section">
+      <h3>Prompt maestro</h3>
+      <textarea readonly>{{ prompt.full_prompt or '' }}</textarea>
+      <div class="flex" style="margin-top: 10px;">
+        <button class="button" onclick="navigator.clipboard.writeText(`{{ prompt.full_prompt | replace('`','\\`') }}`)">Copiar prompt</button>
+        <span class="badge">Slug: {{ prompt.slug }}</span>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Generar IA-HASH</h3>
+      <p class="muted">Pega la URL compartida de ChatGPT para verificar la conversación.</p>
+      <input id="chat-url" class="input" placeholder="https://chatgpt.com/share/...">
+      <button class="button" style="margin-top: 10px;" onclick="verifyConversation()">Generate IA-HASH</button>
+      <pre id="log" class="muted"></pre>
+    </div>
+  </div>
+  <script>
+    async function verifyConversation() {
+      const url = document.getElementById('chat-url').value;
+      const log = document.getElementById('log');
+      log.textContent = 'Verificando...';
+      const res = await fetch('/api/verify/conversation', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ url, prompt_id: '{{ prompt.slug }}', store_raw: false })
+      });
+      const data = await res.json();
+      log.textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+{% endblock %}

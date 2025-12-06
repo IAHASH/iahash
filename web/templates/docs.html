@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="section">
+    <h2>Documentation</h2>
+    <p class="muted">Protocolo y arquitectura oficiales IA-HASH v1.2.</p>
+    <div class="flex">
+      <a class="button secondary" href="/docs/PROTOCOL_1.2.md">PROTOCOL_1.2.md</a>
+      <a class="button secondary" href="/docs/ARCHITECTURE_1.2.md">ARCHITECTURE_1.2.md</a>
+    </div>
+  </div>
+  {% if iah %}
+    <div class="card">
+      <h3>IA-HASH {{ iah['iah_id'] }}</h3>
+      <p class="muted">Documento público (sin contenido raw).</p>
+      <table class="table">
+        <tr><th>Tipo</th><td>{{ iah['type'] }}</td></tr>
+        <tr><th>Modelo</th><td>{{ iah['model'] }}</td></tr>
+        <tr><th>Timestamp</th><td>{{ iah['timestamp'] }}</td></tr>
+        <tr><th>Prompt ID</th><td>{{ iah['prompt_id'] }}</td></tr>
+        <tr><th>h_prompt</th><td class="muted">{{ iah['h_prompt'] }}</td></tr>
+        <tr><th>h_response</th><td class="muted">{{ iah['h_response'] }}</td></tr>
+        <tr><th>h_total</th><td class="muted">{{ iah['h_total'] }}</td></tr>
+        <tr><th>issuer</th><td>{{ iah['issuer_id'] }}</td></tr>
+        <tr><th>signature</th><td class="muted">{{ iah['signature'] }}</td></tr>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

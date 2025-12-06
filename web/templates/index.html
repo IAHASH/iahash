@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="grid">
+    <div class="card">
+      <h2>IA-HASH v1.2</h2>
+      <p>Sellado criptográfico y verificable para prompts y respuestas de IA. Compatible con FastAPI, SQLite y firmas Ed25519.</p>
+      <div class="flex">
+        <a class="button" href="/verify">Verificar ahora</a>
+        <a class="button secondary" href="/docs">Protocolo</a>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Prompts destacados</h3>
+      <ul class="muted">
+        {% for prompt in prompts[:3] %}
+          <li><a href="/prompts/{{ prompt.slug }}">{{ prompt.title }}</a> — {{ prompt.category }}</li>
+        {% endfor %}
+      </ul>
+      <a href="/prompts" class="button secondary">Ver todos</a>
+    </div>
+    <div class="card">
+      <h3>Secuencias</h3>
+      <ul class="muted">
+        {% for sequence in sequences[:3] %}
+          <li><a href="/sequences/{{ sequence.slug }}">{{ sequence.title }}</a></li>
+        {% endfor %}
+      </ul>
+      <a href="/sequences" class="button secondary">Explorar</a>
+    </div>
+  </div>
+{% endblock %}

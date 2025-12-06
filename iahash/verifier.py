@@ -1,50 +1,101 @@
+"""Verification utilities for IA-HASH v1.2."""
+
 from __future__ import annotations
 
-from typing import Tuple
-import json
+from typing import Any, Dict
 
-from .crypto import load_public_key, normalise, sha256_hex, verify_signature_hex
-from .models import IAHashDocument, LLMID
-from .paths import public_key_path
+import httpx
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+from iahash.crypto import normalize_text, sha256_hex, verify_signature
+from iahash.issuer import PROTOCOL_VERSION, build_total_hash_string
 
 
-def _context_block(doc: IAHashDocument) -> str:
-    payload = {
-        "prompt_id": doc.prompt_id,
-        "modelo": doc.modelo,
-        "timestamp": doc.timestamp,
-        "subject": doc.subject,
-        "conversation_id": doc.conversation_id,
-        "llmid": doc.llmid.model_dump() if isinstance(doc.llmid, LLMID) else doc.llmid,
-        "metadata": doc.metadata or {},
-        "contexto": None,
+class VerificationStatus:
+    VALID = "VALID"
+    INVALID_SIGNATURE = "INVALID_SIGNATURE"
+    HASH_MISMATCH = "HASH_MISMATCH"
+    PROMPT_MISMATCH = "PROMPT_MISMATCH"
+    UNREACHABLE_SOURCE = "UNREACHABLE_SOURCE"
+    UNKNOWN = "UNKNOWN"
+
+
+def load_remote_public_key(url: str) -> Ed25519PublicKey:
+    response = httpx.get(url, timeout=10)
+    response.raise_for_status()
+    data = response.content
+    return serialization.load_pem_public_key(data)
+
+
+def verify_document(document: Dict[str, Any]) -> Dict[str, Any]:
+    errors: list[str] = []
+    status = VerificationStatus.UNKNOWN
+
+    try:
+        public_key = load_remote_public_key(document["issuer_pk_url"])
+    except Exception:
+        status = VerificationStatus.UNREACHABLE_SOURCE
+        return {
+            "valid": False,
+            "status": status,
+            "signature_valid": False,
+            "hash_valid": False,
+            "prompt_match": False,
+            "errors": ["Unable to fetch public key"],
+        }
+
+    signature_valid = verify_signature(
+        document["h_total"].encode("utf-8"), document.get("signature", ""), public_key
+    )
+    if not signature_valid:
+        status = VerificationStatus.INVALID_SIGNATURE
+        errors.append("Signature verification failed")
+
+    h_prompt_expected = document.get("h_prompt")
+    h_response_expected = document.get("h_response")
+
+    # recompute hashes when raw text exists
+    prompt_match = True
+    if document.get("raw_prompt_text") is not None:
+        recomputed_prompt = sha256_hex(normalize_text(document["raw_prompt_text"]))
+        if recomputed_prompt != h_prompt_expected:
+            prompt_match = False
+            errors.append("Prompt hash mismatch")
+    if document.get("raw_response_text") is not None:
+        recomputed_response = sha256_hex(normalize_text(document["raw_response_text"]))
+        if recomputed_response != h_response_expected:
+            prompt_match = False
+            errors.append("Response hash mismatch")
+
+    h_total_recomputed = sha256_hex(
+        build_total_hash_string(
+            document.get("protocol_version", PROTOCOL_VERSION),
+            document.get("prompt_id"),
+            h_prompt_expected,
+            h_response_expected,
+            document.get("model", "unknown"),
+            document.get("timestamp", ""),
+        )
+    )
+    hash_valid = h_total_recomputed == document.get("h_total")
+    if not hash_valid:
+        errors.append("h_total mismatch")
+
+    if signature_valid and hash_valid and prompt_match:
+        status = VerificationStatus.VALID
+    elif not signature_valid:
+        status = VerificationStatus.INVALID_SIGNATURE
+    elif not hash_valid:
+        status = VerificationStatus.HASH_MISMATCH
+    elif not prompt_match:
+        status = VerificationStatus.PROMPT_MISMATCH
+
+    return {
+        "valid": status == VerificationStatus.VALID,
+        "status": status,
+        "signature_valid": signature_valid,
+        "hash_valid": hash_valid,
+        "prompt_match": prompt_match,
+        "errors": errors,
     }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
-
-
-def verify_document(doc: IAHashDocument) -> Tuple[bool, str]:
-    """Verify integrity and authenticity of an IA-HASH document."""
-
-    h_prompt_local = sha256_hex(normalise(doc.prompt_maestro))
-    if h_prompt_local != doc.h_prompt:
-        return False, "Prompt Maestro has been modified"
-
-    h_respuesta_local = sha256_hex(normalise(doc.respuesta))
-    if h_respuesta_local != doc.h_respuesta:
-        return False, "Response has been modified"
-
-    context_serialised = _context_block(doc)
-    h_context_local = sha256_hex(normalise(context_serialised))
-    if h_context_local != doc.h_contexto:
-        return False, "Context has been modified"
-
-    cadena_total = "|".join([doc.version, doc.h_prompt, doc.h_respuesta, doc.h_contexto])
-    h_total_local = sha256_hex(cadena_total.encode("utf-8"))
-    if h_total_local != doc.h_total:
-        return False, "Metadata has been modified"
-
-    pk = load_public_key(public_key_path())
-    if not verify_signature_hex(doc.h_total, doc.firma_total, pk):
-        return False, "Invalid signature (not issued by declared issuer)"
-
-    return True, "IA-HASH document is valid and unmodified"

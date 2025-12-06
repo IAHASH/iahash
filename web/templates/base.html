@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IA-HASH v1.2</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header>
+    <div class="navbar">
+      <a class="logo" href="/">
+        <img src="/static/logo.png" alt="IA-HASH logo">
+        <span>IA-HASH</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/">Home</a>
+        <a href="/prompts">Prompts</a>
+        <a href="/sequences">Sequences</a>
+        <a href="/compare">Compare</a>
+        <a href="/verify">Verify</a>
+        <a href="/docs">Docs</a>
+        <a href="/account">Account</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <div class="footer">
+    IA-HASH v1.2 · Deterministic trust for AI outputs.
+  </div>
+</body>
+</html>

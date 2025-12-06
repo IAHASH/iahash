@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="section">
+    <h2>Verify</h2>
+    <p class="muted">Tres modos: par de textos, conversación compartida y checker IA-HASH.</p>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('pair')">Pair</div>
+    <div class="tab" onclick="showTab('conversation')">Prompt + URL</div>
+    <div class="tab" onclick="showTab('checker')">Checker</div>
+  </div>
+
+  <div id="tab-pair" class="card">
+    <h3>Pair verification</h3>
+    <textarea id="pair-prompt" placeholder="Prompt text" class="input"></textarea>
+    <textarea id="pair-response" placeholder="Response text" class="input" style="margin-top: 10px;"></textarea>
+    <div class="flex" style="margin-top: 10px;">
+      <select id="pair-model" class="input">
+        <option value="gpt-4o">gpt-4o</option>
+        <option value="claude-3-opus">claude-3-opus</option>
+        <option value="unknown" selected>unknown</option>
+      </select>
+      <button class="button" onclick="submitPair()">Generate</button>
+    </div>
+    <pre id="pair-log" class="muted"></pre>
+  </div>
+
+  <div id="tab-conversation" class="card" style="display:none;">
+    <h3>Conversation verification</h3>
+    <select id="prompt-slug" class="input">
+      <option value="">(opcional) Selecciona prompt maestro</option>
+      {% for prompt in prompts %}
+        <option value="{{ prompt.slug }}">{{ prompt.title }}</option>
+      {% endfor %}
+    </select>
+    <input id="conv-url" class="input" placeholder="https://chatgpt.com/share/..." style="margin-top: 10px;">
+    <button class="button" style="margin-top: 10px;" onclick="submitConversation()">Verificar conversación</button>
+    <pre id="conv-log" class="muted"></pre>
+  </div>
+
+  <div id="tab-checker" class="card" style="display:none;">
+    <h3>Checker</h3>
+    <textarea id="checker-json" class="input" placeholder='Pega documento IA-HASH JSON'></textarea>
+    <button class="button" style="margin-top: 10px;" onclick="submitChecker()">Validar</button>
+    <pre id="checker-log" class="muted"></pre>
+  </div>
+
+  <script>
+    function showTab(name) {
+      ['pair','conversation','checker'].forEach(id => {
+        document.getElementById(`tab-${id}`).style.display = id === name ? 'block' : 'none';
+        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      });
+      const tabIndex = {'pair':0,'conversation':1,'checker':2}[name];
+      document.querySelectorAll('.tab')[tabIndex].classList.add('active');
+    }
+
+    async function submitPair() {
+      const payload = {
+        prompt_text: document.getElementById('pair-prompt').value,
+        response_text: document.getElementById('pair-response').value,
+        model: document.getElementById('pair-model').value
+      };
+      const res = await fetch('/api/verify/pair', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      document.getElementById('pair-log').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+
+    async function submitConversation() {
+      const payload = {
+        url: document.getElementById('conv-url').value,
+        prompt_id: document.getElementById('prompt-slug').value || null
+      };
+      const res = await fetch('/api/verify/conversation', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      document.getElementById('conv-log').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+
+    async function submitChecker() {
+      const raw = document.getElementById('checker-json').value;
+      const payload = { document: JSON.parse(raw) };
+      const res = await fetch('/api/check', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      document.getElementById('checker-log').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+  </script>
+{% endblock %}
