@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>IA-HASH · Verify AI prompt–response pairs</title>
+  <title>IAHash · Verify AI prompt–response pairs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta
     name="description"
-    content="IA-HASH is an open, model-agnostic standard to sign and verify AI-generated prompt–response pairs."
+    content="IAHash is an open, model-agnostic standard to sign and verify AI-generated prompt–response pairs."
   />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
@@ -14,8 +14,8 @@
   <header class="site-header">
     <div class="container header-inner">
       <a href="#hero" class="brand">
-        <img src="/static/logo.png" alt="IA-HASH logo" class="brand-logo" />
-        <span class="brand-text">IA-HASH</span>
+        <img src="/static/logo.png" alt="IAHash logo" class="brand-logo" />
+        <span class="brand-text">IAHash</span>
       </a>
       <nav class="nav">
         <a href="#verify">Verify</a>
@@ -35,7 +35,7 @@
         <div class="hero-copy">
           <h1>Trust that your AI really wrote this.</h1>
           <p class="hero-lead">
-            IA-HASH is a lightweight, open standard to cryptographically verify
+            IAHash is a lightweight, open standard to cryptographically verify
             that a prompt–response pair truly comes from your AI – and hasn’t been
             edited afterwards.
           </p>
@@ -46,20 +46,20 @@
             <li>✔ No blockchain, no vendor lock-in</li>
           </ul>
           <p class="hero-sub">
-            Paste an IA-HASH document on the right and get a
+            Paste an IAHash document on the right and get a
             <strong>iahash.com VERIFIED</strong> result in seconds.
           </p>
         </div>
 
         <div id="verify" class="hero-card">
-          <h2>Verify an IA-HASH document</h2>
+          <h2>Verify an IAHash document</h2>
           <p class="card-subtitle">
             Paste the JSON document issued by your assistant or backend.
           </p>
 
           <form id="verify-form" class="verify-form">
             <label for="iah-json-input" class="field-label">
-              IA-HASH JSON
+              IAHash JSON
             </label>
             <textarea
               id="iah-json-input"
@@ -67,7 +67,7 @@
               rows="14"
               spellcheck="false"
               placeholder='{
-  "version": "IA-HASH-1",
+  "version": "IAHash-1",
   "prompt_id": "CV_v01",
   "prompt_description": "Write the most honest CV about the user...",
   "response": "AI response...",
@@ -76,7 +76,7 @@
             ></textarea>
 
             <div class="form-actions">
-              <button type="submit" class="btn btn-primary">Verify IA-HASH</button>
+              <button type="submit" class="btn btn-primary">Verify IAHash</button>
               <button type="button" id="clear-btn" class="btn btn-ghost">
                 Clear
               </button>
@@ -89,7 +89,7 @@
               <span id="result-title">Waiting for a document…</span>
             </div>
             <p id="result-message" class="result-message">
-              Paste a valid IA-HASH JSON document and click “Verify IA-HASH”.
+              Paste a valid IAHash JSON document and click “Verify IAHash”.
             </p>
             <details class="result-details">
               <summary>Raw verification response</summary>
@@ -106,9 +106,9 @@
     <!-- ISSUE FROM PROMPT + RESPONSE -->
     <section id="issue-from-text" class="section section-alt">
       <div class="container">
-        <h2>Issue an IA-HASH document from Prompt + Response</h2>
+        <h2>Issue an IAHash document from Prompt + Response</h2>
         <p class="section-lead">
-          Paste the exact raw prompt and the raw AI response to generate a cryptographically signed IA-HASH document.
+          Paste the exact raw prompt and the raw AI response to generate a cryptographically signed IAHash document.
         </p>
 
         <div class="hero-card" style="margin-top:20px;">
@@ -127,7 +127,7 @@
             <textarea id="issue-response" class="field-textarea" rows="14" spellcheck="false"></textarea>
 
             <div class="form-actions">
-              <button id="issue-btn" class="btn btn-primary">Generate IA-HASH</button>
+              <button id="issue-btn" class="btn btn-primary">Generate IAHash</button>
               <button type="button" id="issue-clear-btn" class="btn btn-ghost">Clear</button>
             </div>
           </div>
@@ -138,10 +138,10 @@
               <span id="issue-title">Ready.</span>
             </div>
             <p id="issue-message" class="result-message">
-              Paste data and click “Generate IA-HASH”.
+              Paste data and click “Generate IAHash”.
             </p>
             <details class="result-details">
-              <summary>IA-HASH Document</summary>
+              <summary>IAHash Document</summary>
               <pre id="issue-json-output" class="result-raw">(empty)</pre>
             </details>
           </div>
@@ -153,7 +153,7 @@
   <footer class="site-footer">
     <div class="container footer-inner">
       <div class="footer-left">
-        <span class="brand-text">IA-HASH</span>
+        <span class="brand-text">IAHash</span>
         <span class="footer-divider">·</span>
         <span>Open, model-agnostic verification for AI output.</span>
       </div>
@@ -185,13 +185,13 @@
         resultBox.className = "verify-result verify-result--idle";
         resultTitle.textContent = "Waiting for a document…";
         resultMessage.textContent =
-          "Paste a valid IA-HASH JSON document and click “Verify IA-HASH”.";
+          "Paste a valid IAHash JSON document and click “Verify IAHash”.";
         resultRaw.textContent = "(no response yet)";
       }
 
       function setStateLoading() {
         resultBox.className = "verify-result verify-result--loading";
-        resultTitle.textContent = "Verifying IA-HASH document…";
+        resultTitle.textContent = "Verifying IAHash document…";
         resultMessage.textContent = "Contacting /verify endpoint.";
         resultRaw.textContent = "(awaiting response)";
       }
@@ -205,9 +205,9 @@
       function setStateSuccess(isValid, data) {
         if (isValid) {
           resultBox.className = "verify-result verify-result--ok";
-          resultTitle.textContent = "ia-hash.com VERIFIED";
+          resultTitle.textContent = "IAHash.com VERIFIED";
           resultMessage.textContent =
-            "The IA-HASH document is valid and the signature matches.";
+            "The IAHash document is valid and the signature matches.";
         } else {
           resultBox.className = "verify-result verify-result--fail";
           resultTitle.textContent = "NOT VERIFIED";
@@ -266,7 +266,7 @@
       setStateIdle();
 
 
-      /* --------------- NEW IA-HASH ISSUER LOGIC (PROMPT + RESPONSE) --------------- */
+      /* --------------- NEW IAHash ISSUER LOGIC (PROMPT + RESPONSE) --------------- */
 
       const issueBtn = document.getElementById("issue-btn");
       const issueClear = document.getElementById("issue-clear-btn");
@@ -286,14 +286,14 @@
           issueResult.className = "verify-result verify-result--error";
           issueTitle.textContent = "Missing data";
           issueMessage.textContent =
-            "Both prompt and response are required to issue IA-HASH.";
+            "Both prompt and response are required to issue IAHash.";
           issueOutput.textContent = "";
           return;
         }
 
         issueResult.style.display = "block";
         issueResult.className = "verify-result verify-result--loading";
-        issueTitle.textContent = "Issuing IA-HASH…";
+        issueTitle.textContent = "Issuing IAHash…";
         issueMessage.textContent = "Contacting /issue endpoint.";
         issueOutput.textContent = "(awaiting response)";
 
@@ -312,15 +312,15 @@
           const data = await res.json();
 
           issueResult.className = "verify-result verify-result--ok";
-          issueTitle.textContent = "IA-HASH issued ✔";
-          issueMessage.textContent = "Copy and store the IA-HASH JSON.";
+          issueTitle.textContent = "IAHash issued ✔";
+          issueMessage.textContent = "Copy and store the IAHash JSON.";
 
           issueOutput.textContent = JSON.stringify(data, null, 2);
 
         } catch (err) {
           issueResult.className = "verify-result verify-result--error";
           issueTitle.textContent = "Error";
-          issueMessage.textContent = "Could not issue IA-HASH document.";
+          issueMessage.textContent = "Could not issue IAHash document.";
           issueOutput.textContent = String(err);
         }
       });
