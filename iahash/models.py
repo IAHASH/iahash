@@ -15,7 +15,7 @@ class IAHashDocument(BaseModel):
     h_total: str
     firma_total: str
 
-    issuer_id: str = "ia-hash.com"
+    issuer_id: str = "iahash.com"
     issuer_pk_url: str | None = None
 
 
