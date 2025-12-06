@@ -25,6 +25,10 @@ Limpieza de módulos, imports y dependencias.
 
 Estructura estándar de librería Python.
 
+Normalización avanzada (IHS-1):
+Unicode NFC, trimming duro, eliminación de invisibles, colapso de espacios, unificación de saltos de línea.
+Esto garantiza determinismo absoluto del hashing.
+
 Claves Ed25519 + issuer.
 
 Estándar JSON IAHASH-1.
@@ -186,6 +190,7 @@ Enlace para comparar con fuente original
 🧱 FASE 3 — v2.0 (Estándar completo)
 
 IA-HASH deja de ser solo una librería: se convierte en un protocolo estándar.
+Implementar IA-HASH Trust-Chain: soporte opcional para identidades extendidas de modelos, claves institucionales y cadenas de firma verificables. Inspirado en sistemas formales de seguridad pero adaptado al minimalismo IA-HASH.
 
 🌐 1. Especificación oficial (Specs v2)**
 
