@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/IAHASH/iahash/main/web/logo.png" width="120" />
 </p>
 
-<h1 align="center">IA-HASH</h1>
+<h1 align="center">IAHash</h1>
 
 <p align="center">
   A universal, model-agnostic standard to sign and verify AI-generated Prompt + Response pairs.  
@@ -19,7 +19,7 @@
 
 # 📌 Overview
 
-**IA-HASH** is an open, lightweight, future-proof protocol that allows anyone to *cryptographically verify* that:
+**IAHash** is an open, lightweight, future-proof protocol that allows anyone to *cryptographically verify* that:
 
 ✔ A prompt was not modified  
 ✔ A response was not modified  
@@ -33,15 +33,15 @@ All without depending on:
 ❌ Proprietary SDKs  
 ❌ Vendor lock-in  
 
-**IA-HASH = integrity + authenticity + auditability + reproducibility**.
+**IAHash = integrity + authenticity + auditability + reproducibility**.
 
 ---
 
-# ⭐ Why IA-HASH?
+# ⭐ Why IAHash?
 
 As AI assistants become part of our personal, professional and legal workflows, we need a standard to **prove that an AI truly generated a certain output**, without any editing or falsification afterward.
 
-IA-HASH solves this with **three simple steps**:
+IAHash solves this with **three simple steps**:
 
 1. **Hash the prompt**  
 2. **Hash the response**  
@@ -53,7 +53,7 @@ Anyone with the **public key** can later verify the document.
 
 # 🎯 Use Cases
 
-IA-HASH is ideal for:
+IAHash is ideal for:
 
 - ✔ Verified AI-generated CVs  
 - ✔ Psychological or personality assessments  
@@ -65,7 +65,7 @@ IA-HASH is ideal for:
 
 ---
 
-# 🔧 How IA-HASH Works (Minimal Protocol)
+# 🔧 How IAHash Works (Minimal Protocol)
 
 ### **1. Normalize text**
 
@@ -90,13 +90,13 @@ h_total = SHA256(
 
 signature = sign(private_key, h_total)
 
-5. Bundle everything into a JSON IA-HASH Document
+5. Bundle everything into a JSON IAHash Document
 This document can later be verified offline.
 
-📄 IA-HASH Document Example
+📄 IAHash Document Example
 
 {
-  "version": "IA-HASH-1",
+  "version": "IAHash-1",
   "prompt_id": "CV_v01",
   "prompt_description": "Write the most honest CV about the user...",
   "response": "Here goes the AI-generated output...",
@@ -109,7 +109,7 @@ This document can later be verified offline.
   "h_total":    "9e0041aa0c...",
 
   "issuer_id": "IAHASH-001",
-  "issuer_url": "https://ia-hash.com/public-key.pem"
+  "issuer_url": "https://IAHash.com/public-key.pem"
 }
 
 📦 Installation
@@ -120,7 +120,7 @@ Generate your keypair:
 
 
 python scripts/generate_keys.py
-Issue a signed IA-HASH document:
+Issue a signed IAHash document:
 
 python scripts/demo_issue_verify.py
 
@@ -139,13 +139,13 @@ Open in browser:
 arduino
 Copiar código
 https://your-domain.com/
-Paste the IA-HASH JSON → click Verify ✔
+Paste the IAHash JSON → click Verify ✔
 
 🗂 Project Structure
 iahash/
   ├── crypto.py        # hashing + signing utilities
-  ├── issuer.py        # create IA-HASH documents
-  ├── verifier.py      # verify IA-HASH documents
+  ├── issuer.py        # create IAHash documents
+  ├── verifier.py      # verify IAHash documents
   ├── models.py        # Pydantic schemas
 
 api/
@@ -182,7 +182,7 @@ Open Issues, Discussions, or Pull Requests at:
 👉 https://github.com/IAHASH/iahash
 
 📫 Contact
-Website: https://ia-hash.com
+Website: https://IAHash.com
 Repository: https://github.com/IAHASH/iahash
 
 Made with ❤️ and cryptographic rigor.
