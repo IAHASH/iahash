@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import hashlib
+import re
+import unicodedata
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -10,19 +12,48 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 
 
+INVISIBLE_CHARS = [
+    "\u200b",  # zero width space
+    "\ufeff",  # zero width no-break space
+    "\u200c",  # zero width non-joiner
+    "\u200d",  # zero width joiner
+    "\u2060",  # word joiner
+]
+
+
 def normalise(text: str) -> bytes:
-    """Normalise text before hashing.
+    """Normalise text using the IHS-1 ruleset.
 
     Steps:
-    - Convert CRLF / CR to LF
-    - Strip trailing spaces on each line
-    - Encode as UTF-8
+    - Unicode NFC normalisation
+    - Replace CRLF/CR with LF
+    - Remove zero-width characters and non-breaking spaces
+    - Collapse internal whitespace to single spaces per line
+    - Trim leading/trailing whitespace and empty lines
+    - Encode as UTF-8 bytes
     """
 
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = "\n".join(line.rstrip() for line in text.split("\n"))
-    text = text.rstrip("\n")
-    return text.encode("utf-8")
+    # Unicode normalisation
+    normalised = unicodedata.normalize("NFC", text or "")
+
+    # Standardise newlines
+    normalised = normalised.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Remove invisibles and NBSP
+    for ch in INVISIBLE_CHARS:
+        normalised = normalised.replace(ch, "")
+    normalised = normalised.replace("\xa0", " ")
+
+    # Collapse whitespace per line
+    lines = [re.sub(r"\s+", " ", line).strip() for line in normalised.split("\n")]
+    # Remove leading/trailing empty lines after trimming
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+
+    collapsed = "\n".join(lines)
+    return collapsed.encode("utf-8")
 
 
 def sha256_hex(data: bytes) -> str:

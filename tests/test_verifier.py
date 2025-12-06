@@ -33,4 +33,4 @@ def test_verifier_rejects_tampered_fields(temp_keys):
     tampered_meta = doc.model_copy(update={"modelo": "otro-modelo"})
     valid_meta, reason_meta = verify_document(tampered_meta)
     assert valid_meta is False
-    assert "metadata" in reason_meta.lower()
+    assert "context" in reason_meta.lower()

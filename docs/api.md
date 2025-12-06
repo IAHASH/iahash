@@ -29,8 +29,17 @@ Base URL: `http://localhost:8000`
 - **Respuesta**: texto plano PEM.
 
 ### GET /master-prompts
-- **Descripción**: Placeholder de prompts maestros aprobados.
-- **Respuesta**: lista de objetos `{id, title, language, description, prompt}`.
+- **Descripción**: Listado de prompts maestros aprobados con hash determinista.
+- **Respuesta**: lista de objetos `{id, title, version, language, description, prompt_hash}`.
+
+### GET /master-prompts/{prompt_id}
+- **Descripción**: Devuelve el prompt maestro completo (incluye `body` y `prompt_hash`).
+- **Respuesta**: `{id, title, version, language, category, description, body, prompt_hash, metadata}`.
+
+### POST /master-prompts
+- **Descripción**: Crea o actualiza un prompt maestro localmente. Calcula `prompt_hash` si no se envía.
+- **Body JSON**: `{id, title, version, language?, category?, description?, body, metadata?, prompt_hash?}`.
+- **Respuesta**: prompt maestro persistido con `prompt_hash` calculado.
 
 ## Ejemplos
 
