@@ -19,7 +19,7 @@ def issue_document(
     issuer_id: str = "iahash.com",
 ) -> IAHashDocument:
     """
-    Create a signed IA-HASH document for the given prompt + response.
+    Create a signed IA HASH document for the given prompt + response.
     """
 
     if timestamp is None:
@@ -28,7 +28,7 @@ def issue_document(
     h_prompt = sha256_hex(normalise(prompt_text))
     h_respuesta = sha256_hex(normalise(respuesta_text))
 
-    version = "IA-HASH-1"
+    version = "IAHASH-1"
     cadena_total = "|".join(
         [version, prompt_id or "", h_prompt, h_respuesta, modelo, timestamp]
     )
