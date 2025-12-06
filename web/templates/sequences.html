@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="section">
+    <h2>Sequences</h2>
+    <p class="muted">Rutinas verificables construidas sobre prompts maestros.</p>
+  </div>
+  <div class="grid">
+    {% for sequence in sequences %}
+      <div class="card">
+        <h3>{{ sequence.title }}</h3>
+        <p>{{ sequence.description }}</p>
+        <p class="muted">{{ sequence.category }}</p>
+        <a class="button secondary" href="/sequences/{{ sequence.slug }}">Ver secuencia</a>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

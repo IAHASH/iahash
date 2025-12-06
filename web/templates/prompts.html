@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="section">
+    <h2>Prompts</h2>
+    <p class="muted">Prompts maestros y públicos disponibles para verificación inmediata.</p>
+  </div>
+  <div class="grid">
+    {% for prompt in prompts %}
+      <div class="card">
+        <span class="badge">{{ prompt.category or 'general' }}</span>
+        <h3>{{ prompt.title }}</h3>
+        <p>{{ prompt.description or 'Prompt maestro IA-HASH' }}</p>
+        <a class="button secondary" href="/prompts/{{ prompt.slug }}">Detalle</a>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

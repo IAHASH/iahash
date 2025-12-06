@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="card">
+    <h2>{{ sequence.title }}</h2>
+    <p class="muted">{{ sequence.description }}</p>
+    <div class="section">
+      <h3>Steps</h3>
+      <ol class="muted">
+        {% for step in sequence.steps %}
+          <li>
+            <strong>{{ step.title }}</strong> — {{ step.description or '' }}
+            {% if step.prompt_slug %}
+              (<a href="/prompts/{{ step.prompt_slug }}">prompt</a>)
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+{% endblock %}
