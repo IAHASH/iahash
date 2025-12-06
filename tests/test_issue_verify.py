@@ -8,7 +8,7 @@ def test_issue_and_verify_roundtrip(temp_keys):
         respuesta_text="Hola humano",
         modelo="gpt-test",
         prompt_id="demo",
-        subject_id="tester",
+        subject="tester",
         conversation_id="conv-1",
         timestamp="2024-01-01T00:00:00Z",
     )

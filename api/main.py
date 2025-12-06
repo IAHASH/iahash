@@ -6,11 +6,18 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from iahash.issuer import issue_document
-from iahash.models import IAHashDocument, IssueFromTextRequest
+from iahash.models import IAHashDocument, IssueFromTextRequest, LLMID
 from iahash.paths import public_key_path
+from iahash.prompts import (
+    MasterPrompt,
+    MasterPromptSummary,
+    get_master_prompt,
+    list_master_prompts,
+    save_custom_prompt,
+)
 from iahash.verifier import verify_document
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -25,6 +32,26 @@ class IssuePayload(IssueFromTextRequest):
     prompt_maestro: str = Field(..., description="Texto exacto enviado a la IA")
     respuesta: str = Field(..., description="Respuesta completa devuelta por la IA")
     modelo: str | None = Field(None, description="Modelo utilizado: gpt-5, claude-3, etc.")
+    llmid: LLMID | None = None
+    contexto: str | None = Field(None, description="Contexto adicional a normalizar")
+    metadata: dict = Field(default_factory=dict)
+
+
+class MasterPromptCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(..., description="Identificador estable (PROMPT-ID)")
+    title: str
+    version: str
+    language: str = "es"
+    category: str | None = None
+    description: str | None = None
+    body: str
+    metadata: dict = Field(default_factory=dict)
+    prompt_hash: str | None = Field(
+        default=None,
+        description="Hash opcional si ya está calculado. Si falta, se calcula automáticamente.",
+    )
 
 
 def ensure_public_key(path: Path = public_key_path()) -> Path:
@@ -55,8 +82,11 @@ def issue(payload: IssuePayload) -> IAHashDocument:
         respuesta_text=payload.respuesta,
         modelo=payload.modelo,
         prompt_id=payload.prompt_id,
-        subject_id=payload.subject_id,
+        subject=payload.subject,
         conversation_id=payload.conversation_id,
+        llmid=payload.llmid,
+        metadata=payload.metadata,
+        contexto=payload.contexto,
     )
     return doc
 
@@ -78,34 +108,38 @@ def public_key(path: Annotated[Path, Depends(ensure_public_key)]) -> str:
     return path.read_text()
 
 
-MASTER_PROMPTS = [
-    {
-        "id": "cv-honesto-v1",
-        "title": "CV Honesto",
-        "language": "es",
-        "description": "Plantilla para crear un CV transparente con logros verificables.",
-        "prompt": "Redacta un CV honesto resaltando logros verificables y omitiendo exageraciones.",
-    },
-    {
-        "id": "analisis-psicologico-v1",
-        "title": "Análisis psicológico rápido",
-        "language": "es",
-        "description": "Guía para un análisis psicológico breve sin diagnóstico clínico.",
-        "prompt": "Analiza el siguiente texto desde la perspectiva emocional y de sesgos cognitivos.",
-    },
-    {
-        "id": "auto-evaluacion-profesional-v1",
-        "title": "Autoevaluación profesional",
-        "language": "es",
-        "description": "Checklist para evaluar desempeño profesional y áreas de mejora.",
-        "prompt": "Evalúa fortalezas, áreas de mejora y siguientes pasos en la trayectoria profesional.",
-    },
-]
+@app.get(
+    "/master-prompts",
+    tags=["IA-HASH"],
+    summary="Listado de prompts maestros",
+    response_model=list[MasterPromptSummary],
+)
+def master_prompts() -> list[MasterPromptSummary]:
+    return list_master_prompts()
 
 
-@app.get("/master-prompts", tags=["IA-HASH"], summary="Listado de prompts maestros")
-def master_prompts() -> list[dict[str, str]]:
-    return MASTER_PROMPTS
+@app.get(
+    "/master-prompts/{prompt_id}",
+    tags=["IA-HASH"],
+    summary="Detalle de prompt maestro incluyendo hash",
+    response_model=MasterPrompt,
+)
+def master_prompt_detail(prompt_id: str) -> MasterPrompt:
+    prompt = get_master_prompt(prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt maestro no encontrado")
+    return prompt
+
+
+@app.post(
+    "/master-prompts",
+    tags=["IA-HASH"],
+    summary="Crear o actualizar un prompt maestro",
+    status_code=201,
+    response_model=MasterPrompt,
+)
+def master_prompt_create(payload: MasterPromptCreate) -> MasterPrompt:
+    return save_custom_prompt(payload.model_dump())
 
 
 @app.get("/", include_in_schema=False)

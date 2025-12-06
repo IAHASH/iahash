@@ -18,7 +18,7 @@ def main() -> None:
         respuesta_text=respuesta,
         modelo=modelo,
         prompt_id="DEMO_CV_V1",
-        subject_id="demo-user",
+        subject="demo-user",
     )
 
     print("Issued IA-HASH document:")
