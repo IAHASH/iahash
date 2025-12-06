@@ -15,8 +15,8 @@ def issue_document(
     prompt_id: str | None = None,
     subject_id: str | None = None,
     timestamp: str | None = None,
-    issuer_pk_url: str | None = "https://ia-hash.com/public-key.pem",
-    issuer_id: str = "ia-hash.com",
+    issuer_pk_url: str | None = "https://iahash.com/public-key.pem",
+    issuer_id: str = "iahash.com",
 ) -> IAHashDocument:
     """
     Create a signed IA-HASH document for the given prompt + response.
