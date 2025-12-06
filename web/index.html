@@ -2,348 +2,309 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <title>IA-HASH · Verificación de salidas IA</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IA-HASH · Prompt + Respuesta verificables</title>
     <meta
       name="description"
-      content="IA-HASH genera y verifica huellas criptográficas de salidas IA (Prompt + Respuesta) sin blockchain ni dependencias de proveedor."
+      content="IA-HASH genera y verifica huellas criptográficas de prompts y respuestas IA usando SHA256 + Ed25519."
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <!-- Barra superior -->
     <header class="top-bar">
       <div class="top-bar-inner">
         <div class="brand">
           <div class="brand-logo">IA</div>
-          <div class="brand-text">
-            <span class="brand-title">IA-HASH</span>
-            <span class="brand-subtitle">Prompt + Respuesta · Verificables</span>
+          <div>
+            <div class="brand-title">IA-HASH</div>
+            <div class="brand-subtitle">Prompt + Respuesta · Verificables</div>
           </div>
         </div>
         <nav class="top-nav">
-          <a href="#issuer" class="nav-link nav-link-active">Emitir</a>
-          <a href="#verifier" class="nav-link">Verificar</a>
-          <a href="#how" class="nav-link">Cómo funciona</a>
-          <a href="https://github.com/IAHASH/iahash" class="nav-link" target="_blank" rel="noreferrer">
-            GitHub
-          </a>
+          <a href="#hero">Inicio</a>
+          <a href="#issuer">Emitir</a>
+          <a href="#verifier">Verificar</a>
+          <a href="#docs">Docs</a>
+          <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
+        <div class="lang-selector">
+          <select id="lang-select">
+            <option value="es">ES</option>
+            <option value="en">EN</option>
+          </select>
+        </div>
       </div>
     </header>
 
-    <main class="page">
-      <div class="layout">
-        <!-- EMISOR -->
-        <section id="issuer" class="card card-main">
-          <div class="card-info">
-            <h2 class="card-title">Generar un nuevo IA-HASH</h2>
-            <p class="card-description">
-              Pega el <strong>prompt maestro</strong> y la <strong>respuesta</strong> de tu IA.
-              IA-HASH generará un documento firmado que podrás compartir y verificar más tarde.
-            </p>
+    <main>
+      <section id="hero" class="hero">
+        <div>
+          <p class="eyebrow">Neutral · Offline · Ed25519</p>
+          <h1>Firma y verifica cualquier Prompt + Respuesta IA</h1>
+          <p class="lede">
+            IA-HASH crea un JSON verificable con hashes SHA256 y firma Ed25519. Funciona con ChatGPT, Claude, modelos locales o
+            cualquier LLM.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#issuer">Emitir IA-HASH</a>
+            <a class="btn btn-secondary" href="#verifier">Verificar documento</a>
+          </div>
+        </div>
+        <div class="hero-card">
+          <div class="seal">IA-HASH VERIFIED</div>
+          <p>Verificación offline años después. Sin blockchain. Sin vendor lock-in.</p>
+          <p class="hint">Incluye `conversation_id` para conversaciones completas (estructura lista para v2).</p>
+        </div>
+      </section>
+
+      <section class="grid">
+        <section id="issuer" class="card">
+          <header>
+            <h2>Issue from Prompt + Response</h2>
+            <p>Genera un IA-HASH JSON listo para compartir, auditar o guardar en tu SQL.</p>
+          </header>
+
+          <div class="field-group">
+            <label for="prompt">Prompt maestro</label>
+            <textarea id="prompt" rows="5" placeholder="Texto exacto enviado a la IA"></textarea>
           </div>
 
-          <form class="form" onsubmit="return false;">
+          <div class="field-group">
+            <label for="response">Respuesta</label>
+            <textarea id="response" rows="6" placeholder="Respuesta completa del modelo"></textarea>
+          </div>
+
+          <div class="field-grid">
             <div class="field-group">
-              <label class="field-label" for="prompt">
-                Prompt maestro (texto exacto enviado al LLM)
-              </label>
-              <textarea id="prompt" class="field-input field-textarea" rows="6"></textarea>
+              <label for="model">Modelo</label>
+              <input id="model" placeholder="gpt-5, claude-3, llama3..." />
             </div>
-
             <div class="field-group">
-              <label class="field-label" for="response">
-                Respuesta del LLM (texto completo devuelto por tu IA)
-              </label>
-              <textarea id="response" class="field-input field-textarea" rows="8"></textarea>
+              <label for="prompt-id">Prompt ID <span class="optional">opcional</span></label>
+              <input id="prompt-id" placeholder="cv_v1, diag_psico_v1" />
             </div>
-
-            <div class="field-grid">
-              <div class="field-group">
-                <label class="field-label" for="model">Modelo</label>
-                <input
-                  id="model"
-                  class="field-input"
-                  placeholder="gpt-5.1, claude-3.5, maia…"
-                />
-              </div>
-              <div class="field-group">
-                <label class="field-label" for="prompt-id">
-                  Prompt ID <span class="field-optional">(opcional)</span>
-                </label>
-                <input
-                  id="prompt-id"
-                  class="field-input"
-                  placeholder="cv_v1, diag_psico_v1…"
-                />
-              </div>
-              <div class="field-group">
-                <label class="field-label" for="subject-id">
-                  Subject ID <span class="field-optional">(opcional)</span>
-                </label>
-                <input
-                  id="subject-id"
-                  class="field-input"
-                  placeholder="user-123, candidato-456…"
-                />
-              </div>
-            </div>
-
-            <div class="form-footer">
-              <button id="btn-issue" class="btn btn-primary" type="button">
-                Generar IA-HASH
-              </button>
-              <button id="btn-issue-clear" class="btn btn-secondary" type="button">
-                Limpiar
-              </button>
-              <span id="issue-status" class="form-status">
-                Listo para generar un nuevo documento.
-              </span>
-            </div>
-
             <div class="field-group">
-              <label class="field-label">
-                Resultado &amp; documento IA-HASH
-              </label>
-              <div class="result-block">
-                <div class="result-header">
-                  <span id="issue-badge" class="badge">Sin verificar</span>
-                  <span id="issue-hint" class="result-hint">
-                    Genera un IA-HASH o reutiliza este JSON para verificarlo en el panel de la derecha.
-                  </span>
-                </div>
-                <pre id="issue-json" class="code-block mono">{}</pre>
-              </div>
+              <label for="subject-id">Subject ID <span class="optional">opcional</span></label>
+              <input id="subject-id" placeholder="user-123, candidato-456" />
             </div>
-          </form>
+          </div>
+
+          <div class="field-group">
+            <label for="conversation-id">Conversation ID <span class="optional">opcional</span></label>
+            <input id="conversation-id" placeholder="chat-abc123 (para conversaciones completas)" />
+          </div>
+
+          <div class="actions">
+            <button id="btn-issue" class="btn btn-primary" type="button">Generar IA-HASH</button>
+            <button id="btn-clear" class="btn" type="button">Limpiar</button>
+            <button id="btn-copy" class="btn" type="button">Copiar JSON</button>
+            <button id="btn-download" class="btn" type="button">Descargar JSON</button>
+            <span id="issue-status" class="status">Listo para emitir.</span>
+          </div>
+
+          <pre id="issue-json" class="code">{}</pre>
         </section>
 
-        <!-- VERIFICADOR -->
-        <section id="verifier" class="card card-side">
-          <div class="card-info">
-            <h2 class="card-title">Verificar un documento IA-HASH</h2>
-            <p class="card-description">
-              Pega el <strong>JSON IA-HASH</strong> o usa el último generado.
-              Comprobaremos hashes, metadatos y firma Ed25519.
-            </p>
+        <section id="verifier" class="card">
+          <header>
+            <h2>Verify IA-HASH</h2>
+            <p>Pega el IA-HASH JSON o usa el último emitido. Verificamos hashes y firma Ed25519.</p>
+          </header>
+
+          <div class="field-group">
+            <label for="chat-url">ChatGPT share URL <span class="optional">(placeholder)</span></label>
+            <input id="chat-url" placeholder="https://chatgpt.com/share/..." />
+            <small class="hint">Preparado para validar contra enlaces compartidos (v2).</small>
           </div>
 
-          <div class="form">
-            <div class="field-group">
-              <label class="field-label" for="verify-json">
-                Documento IA-HASH a verificar
-              </label>
-              <textarea
-                id="verify-json"
-                class="field-input field-textarea mono"
-                rows="12"
-                placeholder='{ "version": "IA-HASH-1", ... }'
-              ></textarea>
-            </div>
+          <div class="field-group">
+            <label for="verify-json">Documento IA-HASH</label>
+            <textarea id="verify-json" rows="10" class="mono" placeholder='{ "version": "IAHASH-1", ... }'></textarea>
+          </div>
 
-            <div class="form-footer">
-              <button id="btn-use-last" class="btn btn-secondary" type="button">
-                Usar último generado
-              </button>
-              <button id="btn-verify" class="btn btn-primary" type="button">
-                Verificar IA-HASH
-              </button>
-              <span id="verify-status" class="form-status">
-                Esperando documento…
-              </span>
-            </div>
+          <div class="actions">
+            <button id="btn-use-last" class="btn" type="button">Usar último emitido</button>
+            <button id="btn-verify" class="btn btn-primary" type="button">Verificar</button>
+            <span id="verify-status" class="status">Esperando documento…</span>
+          </div>
 
-            <div class="result-block">
-              <div class="result-header">
-                <span id="verify-badge" class="badge">Sin verificar</span>
-                <span id="verify-hint" class="result-hint">
-                  El resultado de la verificación aparecerá aquí.
-                </span>
-              </div>
-              <div id="verify-extra" class="result-hint"></div>
-            </div>
-
-            <div id="verify-seal" style="display:none; margin-top:8px;">
-              <img
-                src="/static/badge-verified.svg"
-                alt="IA-HASH Verified"
-                style="max-width:180px; height:auto;"
-              />
-            </div>
+          <div class="result">
+            <div id="verify-badge" class="badge">Sin verificar</div>
+            <div id="verify-reason" class="hint"></div>
           </div>
         </section>
-      </div>
+      </section>
 
-      <!-- CÓMO FUNCIONA -->
-      <section id="how" class="card card-info">
-        <h2 class="card-title">Cómo funciona IA-HASH v1</h2>
-        <ul class="info-list">
-          <li>
-            <strong>1. Normalización</strong>: se unifican saltos de línea (<code>\\n</code>) y
-            espacios finales para que el texto sea reproducible.
-          </li>
-          <li>
-            <strong>2. Hash de prompt y respuesta</strong>:
-            <code>h_prompt = SHA256(normalise(prompt))</code>,
-            <code>h_respuesta = SHA256(normalise(respuesta))</code>.
-          </li>
-          <li>
-            <strong>3. Hash combinado</strong>:
-            <code>h_total = SHA256(version | prompt_id | h_prompt | h_respuesta | modelo | timestamp)</code>.
-          </li>
-          <li>
-            <strong>4. Firma Ed25519</strong>: se firma <code>h_total</code> con la clave privada de
-            <code>iahash.com</code>. La clave pública está en
-            <code>/public-key.pem</code>.
-          </li>
-          <li>
-            <strong>5. Verificación</strong>: cualquiera puede recalcular hashes y comprobar la firma con la clave pública,
-            incluso offline.
-          </li>
+      <section id="how" class="card">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li><strong>Normalise</strong> prompt y respuesta (saltos de línea y espacios finales).</li>
+          <li><strong>Hash</strong> cada parte con SHA256 → `h_prompt`, `h_respuesta`.</li>
+          <li><strong>Combine</strong> `version | prompt_id | h_prompt | h_respuesta | modelo | timestamp` → `h_total`.</li>
+          <li><strong>Sign</strong> `h_total` con Ed25519 → `firma_total`.</li>
+          <li><strong>Verify</strong> recalculando todo con la clave pública desde `/public-key`.</li>
+        </ol>
+      </section>
+
+      <section class="card" id="use-cases">
+        <h2>Use cases</h2>
+        <div class="pill-grid">
+          <span class="pill">CVs verificables</span>
+          <span class="pill">Evaluaciones técnicas</span>
+          <span class="pill">Auditoría IA</span>
+          <span class="pill">Reportes legales</span>
+          <span class="pill">Educación</span>
+          <span class="pill">Modelos locales</span>
+        </div>
+      </section>
+
+      <section class="card" id="master-prompts">
+        <h2>Master Prompts</h2>
+        <p>Explora plantillas listas para emitir IA-HASH (placeholder, pronto editable desde la API).</p>
+        <ul class="master-list">
+          <li><strong>CV Honesto</strong> — Transparencia y logros verificables.</li>
+          <li><strong>Análisis psicológico</strong> — Perspectiva emocional sin diagnóstico clínico.</li>
+          <li><strong>Autoevaluación profesional</strong> — Checklist de fortalezas y áreas de mejora.</li>
         </ul>
-        <p class="info-note">
-          El código completo del protocolo está publicado en el repositorio:
-          <code>iahash/crypto.py</code>, <code>iahash/issuer.py</code>,
-          <code>iahash/verifier.py</code>. :contentReference[oaicite:6]{index=6}
-        </p>
+      </section>
+
+      <section class="card" id="docs">
+        <h2>Docs / Help</h2>
+        <p>Lee la especificación y ejemplos para integrar IA-HASH en tus sistemas.</p>
+        <div class="links">
+          <a href="https://github.com/IAHASH/iahash/blob/main/docs/protocol.md" target="_blank">Protocolo</a>
+          <a href="https://github.com/IAHASH/iahash/blob/main/docs/api.md" target="_blank">API</a>
+          <a href="https://github.com/IAHASH/iahash/blob/main/docs/integration-examples.md" target="_blank">Integraciones</a>
+        </div>
       </section>
     </main>
 
-    <footer class="page-footer">
-      <span>IA-HASH · abierto y sin blockchain.</span>
-      <span>Repositorio: <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">github.com/IAHASH/iahash</a></span>
+    <footer class="footer">
+      <span>IA-HASH · SHA256 + Ed25519 · Neutral y offline-first</span>
     </footer>
 
     <script>
-      const $ = (id) => document.getElementById(id);
-
-      const issueJsonEl = $("issue-json");
-      const issueStatusEl = $("issue-status");
-      const issueBadgeEl = $("issue-badge");
-      const issueHintEl = $("issue-hint");
-
-      const verifyJsonEl = $("verify-json");
-      const verifyStatusEl = $("verify-status");
-      const verifyBadgeEl = $("verify-badge");
-      const verifyHintEl = $("verify-hint");
-      const verifyExtraEl = $("verify-extra");
-      const verifySealEl = $("verify-seal");
-
+      const issueJson = document.getElementById("issue-json");
+      const verifyJson = document.getElementById("verify-json");
+      const issueStatus = document.getElementById("issue-status");
+      const verifyStatus = document.getElementById("verify-status");
+      const verifyBadge = document.getElementById("verify-badge");
+      const verifyReason = document.getElementById("verify-reason");
       let lastIssued = null;
 
-      $("btn-issue").addEventListener("click", async () => {
-        const payload = {
-          prompt_maestro: $("prompt").value,
-          respuesta: $("response").value,
-          modelo: $("model").value || "unknown",
-          prompt_id: $("prompt-id").value || null,
-          subject_id: $("subject-id").value || null,
-        };
+      function setIssueStatus(text) {
+        issueStatus.textContent = text;
+      }
 
-        issueStatusEl.textContent = "Generando documento IA-HASH…";
-        issueBadgeEl.className = "badge";
-        issueBadgeEl.textContent = "Procesando";
+      function setVerifyStatus(text) {
+        verifyStatus.textContent = text;
+      }
+
+      async function postJSON(url, payload) {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(error || "Request failed");
+        }
+        return response.json();
+      }
+
+      document.getElementById("btn-issue").addEventListener("click", async () => {
+        const prompt = document.getElementById("prompt").value.trim();
+        const respuesta = document.getElementById("response").value.trim();
+        const modelo = document.getElementById("model").value.trim() || null;
+        const promptId = document.getElementById("prompt-id").value.trim() || null;
+        const subjectId = document.getElementById("subject-id").value.trim() || null;
+        const conversationId = document.getElementById("conversation-id").value.trim() || null;
+
+        if (!prompt || !respuesta) {
+          setIssueStatus("Necesitas prompt y respuesta.");
+          return;
+        }
 
         try {
-          const res = await fetch("/issue", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+          setIssueStatus("Generando IA-HASH...");
+          const doc = await postJSON("/issue", {
+            prompt_maestro: prompt,
+            respuesta,
+            modelo,
+            prompt_id: promptId,
+            subject_id: subjectId,
+            conversation_id: conversationId,
           });
-          if (!res.ok) {
-            issueStatusEl.textContent = "Error al generar el documento (HTTP " + res.status + ").";
-            issueBadgeEl.className = "badge badge-error";
-            issueBadgeEl.textContent = "Error";
-            return;
-          }
-          const data = await res.json();
-          lastIssued = data;
-          issueJsonEl.textContent = JSON.stringify(data, null, 2);
-          issueStatusEl.textContent = "Documento IA-HASH generado correctamente.";
-          issueBadgeEl.className = "badge badge-success";
-          issueBadgeEl.textContent = "Generado";
-          issueHintEl.textContent = "Puedes copiar este JSON o verificarlo directamente en el panel de la derecha.";
-        } catch (e) {
-          issueStatusEl.textContent = "Error de red al contactar con la API.";
-          issueBadgeEl.className = "badge badge-error";
-          issueBadgeEl.textContent = "Error";
+          lastIssued = doc;
+          issueJson.textContent = JSON.stringify(doc, null, 2);
+          setIssueStatus("Documento emitido. Puedes copiar o descargar el JSON.");
+          verifyBadge.textContent = "Sin verificar";
+        } catch (err) {
+          setIssueStatus(`Error: ${err.message}`);
         }
       });
 
-      $("btn-issue-clear").addEventListener("click", () => {
-        $("prompt").value = "";
-        $("response").value = "";
-        $("model").value = "";
-        $("prompt-id").value = "";
-        $("subject-id").value = "";
-        issueJsonEl.textContent = "{}";
-        lastIssued = null;
-        issueStatusEl.textContent = "Listo para generar un nuevo documento.";
-        issueBadgeEl.className = "badge";
-        issueBadgeEl.textContent = "Sin verificar";
-        issueHintEl.textContent =
-          "Genera un IA-HASH o reutiliza este JSON para verificarlo en el panel de la derecha.";
+      document.getElementById("btn-clear").addEventListener("click", () => {
+        document.getElementById("prompt").value = "";
+        document.getElementById("response").value = "";
+        document.getElementById("model").value = "";
+        document.getElementById("prompt-id").value = "";
+        document.getElementById("subject-id").value = "";
+        document.getElementById("conversation-id").value = "";
+        issueJson.textContent = "{}";
+        verifyJson.value = "";
+        setIssueStatus("Listo para emitir.");
       });
 
-      $("btn-use-last").addEventListener("click", () => {
+      document.getElementById("btn-copy").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(issueJson.textContent);
+          setIssueStatus("JSON copiado al portapapeles.");
+        } catch (err) {
+          setIssueStatus("No se pudo copiar (permiso denegado?).");
+        }
+      });
+
+      document.getElementById("btn-download").addEventListener("click", () => {
+        const blob = new Blob([issueJson.textContent], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "iah-document.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById("btn-use-last").addEventListener("click", () => {
         if (!lastIssued) {
-          verifyStatusEl.textContent = "No hay ningún documento generado todavía.";
+          setVerifyStatus("No hay documento previo.");
           return;
         }
-        verifyJsonEl.value = JSON.stringify(lastIssued, null, 2);
-        verifyStatusEl.textContent = "Documento cargado desde el último IA-HASH generado.";
+        verifyJson.value = JSON.stringify(lastIssued, null, 2);
+        setVerifyStatus("Documento copiado desde el último emitido.");
       });
 
-      $("btn-verify").addEventListener("click", async () => {
-        verifySealEl.style.display = "none";
-        verifyExtraEl.textContent = "";
-        verifyBadgeEl.className = "badge";
-        verifyBadgeEl.textContent = "Verificando";
-        verifyStatusEl.textContent = "Verificando documento…";
-
-        let doc;
+      document.getElementById("btn-verify").addEventListener("click", async () => {
+        let payload;
         try {
-          doc = JSON.parse(verifyJsonEl.value);
-        } catch (e) {
-          verifyStatusEl.textContent = "JSON inválido. Revisa el formato.";
-          verifyBadgeEl.className = "badge badge-error";
-          verifyBadgeEl.textContent = "Error";
+          payload = JSON.parse(verifyJson.value);
+        } catch (err) {
+          setVerifyStatus("JSON inválido.");
           return;
         }
-
         try {
-          const res = await fetch("/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(doc),
-          });
-          if (!res.ok) {
-            verifyStatusEl.textContent = "Error al verificar (HTTP " + res.status + ").";
-            verifyBadgeEl.className = "badge badge-error";
-            verifyBadgeEl.textContent = "Error";
-            return;
-          }
-          const data = await res.json();
-          if (data.valid) {
-            verifyBadgeEl.className = "badge badge-success";
-            verifyBadgeEl.textContent = "Válido";
-            verifyStatusEl.textContent = "Documento IA-HASH válido y sin modificar.";
-            verifyHintEl.textContent = "Hash de prompt, respuesta y metadatos coinciden. Firma Ed25519 correcta.";
-            verifyExtraEl.textContent = data.reason || "";
-            verifySealEl.style.display = "block";
-          } else {
-            verifyBadgeEl.className = "badge badge-error";
-            verifyBadgeEl.textContent = "No válido";
-            verifyStatusEl.textContent = "El documento IA-HASH no es válido.";
-            verifyHintEl.textContent =
-              "Algún hash no coincide o la firma no ha podido verificarse con la clave pública.";
-            verifyExtraEl.textContent = data.reason || "";
-          }
-        } catch (e) {
-          verifyStatusEl.textContent = "Error de red al contactar con la API.";
-          verifyBadgeEl.className = "badge badge-error";
-          verifyBadgeEl.textContent = "Error";
+          setVerifyStatus("Verificando...");
+          const result = await postJSON("/verify", payload);
+          verifyBadge.textContent = result.valid ? "VÁLIDO" : "INVÁLIDO";
+          verifyBadge.classList.toggle("badge-success", result.valid);
+          verifyBadge.classList.toggle("badge-error", !result.valid);
+          verifyReason.textContent = result.reason;
+          setVerifyStatus("Verificación completada.");
+        } catch (err) {
+          setVerifyStatus(`Error: ${err.message}`);
         }
       });
     </script>

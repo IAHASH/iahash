@@ -1,7 +1,9 @@
 #!/bin/sh
 set -e
 
-# Generate keys if they do not exist yet
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
 if [ ! -f "keys/iah_sk.pem" ] || [ ! -f "keys/iah_pk.pem" ]; then
   echo "[IA-HASH] No keys found, generating..."
   python scripts/generate_keys.py

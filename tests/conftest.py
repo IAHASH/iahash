@@ -1,42 +1,41 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-KEYS_DIR = BASE_DIR / "keys"
+from iahash.paths import get_keys_dir
 
 
-def main() -> None:
-    KEYS_DIR.mkdir(exist_ok=True)
+@pytest.fixture
+def temp_keys(tmp_path, monkeypatch) -> Path:
+    key_dir = tmp_path / "keys"
+    key_dir.mkdir()
+    monkeypatch.setenv("IAHASH_KEYS_DIR", str(key_dir))
 
     sk = Ed25519PrivateKey.generate()
     pk = sk.public_key()
 
-    sk_path = KEYS_DIR / "iah_sk.pem"
-    pk_path = KEYS_DIR / "iah_pk.pem"
-
-    sk_path.write_bytes(
+    (key_dir / "iah_sk.pem").write_bytes(
         sk.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption(),
         )
     )
-
-    pk_path.write_bytes(
+    (key_dir / "iah_pk.pem").write_bytes(
         pk.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
     )
 
-    print(f"[IA-HASH] Generated private key at {sk_path}")
-    print(f"[IA-HASH] Generated public key at  {pk_path}")
-    print("[IA-HASH] Reminder: DO NOT commit iah_sk.pem to Git.")
-
-
-if __name__ == "__main__":
-    main()
+    assert get_keys_dir() == key_dir
+    return key_dir

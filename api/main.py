@@ -1,65 +1,116 @@
-from pathlib import Path
+from __future__ import annotations
 
-from fastapi import FastAPI
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from iahash.issuer import issue_document
+from iahash.models import IAHashDocument, IssueFromTextRequest
+from iahash.paths import public_key_path
 from iahash.verifier import verify_document
-from iahash.models import IAHashDocument
+
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+
+class VerifyResponse(BaseModel):
+    valid: bool
+    reason: str
+
+
+class IssuePayload(IssueFromTextRequest):
+    prompt_maestro: str = Field(..., description="Texto exacto enviado a la IA")
+    respuesta: str = Field(..., description="Respuesta completa devuelta por la IA")
+    modelo: str | None = Field(None, description="Modelo utilizado: gpt-5, claude-3, etc.")
+
+
+def ensure_public_key(path: Path = public_key_path()) -> Path:
+    if not path.exists():
+        raise HTTPException(status_code=500, detail="Public key not found. Generate keys first.")
+    return path
 
 
 app = FastAPI(
     title="IA-HASH API",
-    version="0.1.0",
     description="Issue and verify IA-HASH documents (Prompt + Response → Verifiable).",
+    version="0.3.0",
+    contact={"name": "IA-HASH", "url": "https://github.com/IAHASH/iahash"},
+    license_info={"name": "Apache-2.0", "url": "https://www.apache.org/licenses/LICENSE-2.0"},
+    openapi_tags=[{"name": "IA-HASH", "description": "Issue and verify IA-HASH documents."}],
 )
 
 
-class IssuePayload(BaseModel):
-    prompt_maestro: str
-    respuesta: str
-    modelo: str = "unknown"
-    prompt_id: str | None = None
-    subject_id: str | None = None
-
-
-WEB_DIR = Path(__file__).parent.parent / "web"
-
-
-@app.get("/health")
-def health():
+@app.get("/health", tags=["IA-HASH"], summary="Healthcheck")
+def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/issue", response_model=IAHashDocument)
-def issue(payload: IssuePayload):
+@app.post("/issue", response_model=IAHashDocument, tags=["IA-HASH"], summary="Emitir IA-HASH")
+def issue(payload: IssuePayload) -> IAHashDocument:
     doc = issue_document(
         prompt_text=payload.prompt_maestro,
         respuesta_text=payload.respuesta,
         modelo=payload.modelo,
         prompt_id=payload.prompt_id,
         subject_id=payload.subject_id,
+        conversation_id=payload.conversation_id,
     )
     return doc
 
 
-@app.post("/verify")
-def verify(doc: IAHashDocument):
+@app.post("/verify", response_model=VerifyResponse, tags=["IA-HASH"], summary="Verificar IA-HASH")
+def verify(doc: IAHashDocument) -> VerifyResponse:
     valid, reason = verify_document(doc)
-    return {"valid": valid, "reason": reason}
+    return VerifyResponse(valid=valid, reason=reason)
 
 
-# ---- Static web for the verifier ----
+@app.get(
+    "/public-key",
+    summary="Obtener clave pública",
+    response_class=PlainTextResponse,
+    responses={200: {"description": "PEM"}},
+    tags=["IA-HASH"],
+)
+def public_key(path: Annotated[Path, Depends(ensure_public_key)]) -> str:
+    return path.read_text()
+
+
+MASTER_PROMPTS = [
+    {
+        "id": "cv-honesto-v1",
+        "title": "CV Honesto",
+        "language": "es",
+        "description": "Plantilla para crear un CV transparente con logros verificables.",
+        "prompt": "Redacta un CV honesto resaltando logros verificables y omitiendo exageraciones.",
+    },
+    {
+        "id": "analisis-psicologico-v1",
+        "title": "Análisis psicológico rápido",
+        "language": "es",
+        "description": "Guía para un análisis psicológico breve sin diagnóstico clínico.",
+        "prompt": "Analiza el siguiente texto desde la perspectiva emocional y de sesgos cognitivos.",
+    },
+    {
+        "id": "auto-evaluacion-profesional-v1",
+        "title": "Autoevaluación profesional",
+        "language": "es",
+        "description": "Checklist para evaluar desempeño profesional y áreas de mejora.",
+        "prompt": "Evalúa fortalezas, áreas de mejora y siguientes pasos en la trayectoria profesional.",
+    },
+]
+
+
+@app.get("/master-prompts", tags=["IA-HASH"], summary="Listado de prompts maestros")
+def master_prompts() -> list[dict[str, str]]:
+    return MASTER_PROMPTS
+
 
 @app.get("/", include_in_schema=False)
 def serve_index():
     return FileResponse(WEB_DIR / "index.html")
 
 
-app.mount(
-    "/static",
-    StaticFiles(directory=WEB_DIR),
-    name="static",
-)
+app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

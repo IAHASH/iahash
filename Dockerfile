@@ -5,19 +5,26 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Dependencias de sistema mínimas para cryptography + healthcheck (curl)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential curl && \
-    rm -rf /var/lib/apt/lists/*
+# Minimal build tools for cryptography
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY iahash ./iahash
+COPY api ./api
+COPY scripts ./scripts
+COPY web ./web
+COPY docs ./docs
+COPY start.sh README.md ./
 
-# Marcar script como ejecutable
 RUN chmod +x /app/start.sh
 
 EXPOSE 8000
 
-CMD ["./start.sh"]
+CMD ["/app/start.sh"]
