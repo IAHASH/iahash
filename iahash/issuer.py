@@ -10,6 +10,7 @@ from iahash.crypto import (
     PROTOCOL_VERSION as CRYPTO_PROTOCOL_VERSION,
     compute_pair_hashes,
     derive_iah_id,
+    load_ed25519_private_key,
     sign_message,
 )
 from iahash.db import store_iah_document
@@ -156,7 +157,9 @@ def _issue_document(
     )
 
     # Firma Ed25519 sobre h_total (como string hex)
-    signature = sign_message(h_total.encode("utf-8"))
+    private_key = load_ed25519_private_key()
+    signature_bytes = sign_message(h_total.encode("utf-8"), private_key)
+    signature = signature_bytes.hex()
 
     # ID público IA-HASH
     iah_id = derive_iah_id(h_total)
