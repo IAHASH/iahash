@@ -11,9 +11,16 @@ from iahash.crypto import (
     compute_pair_hashes,
     derive_iah_id,
     load_ed25519_private_key,
+    normalize_text,
     sign_message,
 )
 from iahash.db import store_iah_document
+from iahash.extractors.chatgpt_share import (
+    ERROR_PARSING,
+    ERROR_UNREACHABLE,
+    ERROR_UNSUPPORTED,
+    extract_chatgpt_share,
+)
 
 # Re-export para compatibilidad con otros módulos (p.ej. verifier)
 PROTOCOL_VERSION = CRYPTO_PROTOCOL_VERSION
@@ -93,11 +100,34 @@ def issue_conversation(
     Emite un documento IA-HASH tipo CONVERSATION, basado en una URL compartida
     (p.ej. conversación de ChatGPT).
     """
+    if provider and provider.lower() != "chatgpt":
+        raise ValueError("Unsupported conversation provider")
+
+    extracted = extract_chatgpt_share(conversation_url)
+    if extracted.get("error"):
+        detail = extracted["error"]
+        if detail == ERROR_UNREACHABLE:
+            raise RuntimeError("Conversation URL unreachable")
+        if detail == ERROR_PARSING:
+            raise RuntimeError("Conversation content could not be parsed")
+        if detail == ERROR_UNSUPPORTED:
+            raise RuntimeError("Conversation format unsupported")
+        raise RuntimeError(detail)
+
+    extracted_prompt = extracted.get("prompt_text") or prompt_text
+    extracted_response = extracted.get("response_text") or response_text
+    extracted_model = extracted.get("model") or model
+    extracted_provider = extracted.get("provider") or provider
+
+    if prompt_id is not None:
+        if normalize_text(prompt_text) != normalize_text(extracted_prompt):
+            raise ValueError("Extracted prompt does not match master prompt")
+
     return _issue_document(
-        prompt_text=prompt_text,
-        response_text=response_text,
+        prompt_text=extracted_prompt,
+        response_text=extracted_response,
         prompt_id=prompt_id,
-        model=model,
+        model=extracted_model,
         issuer_id=issuer_id,
         issuer_pk_url=issuer_pk_url,
         subject_id=subject_id,
@@ -105,7 +135,7 @@ def issue_conversation(
         doc_type="CONVERSATION",
         mode="TRUSTED_URL",
         conversation_url=conversation_url,
-        provider=provider,
+        provider=extracted_provider,
     )
 
 
