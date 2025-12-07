@@ -55,7 +55,7 @@ def test_verifier_handles_missing_issuer_pk_url(monkeypatch, public_key_bytes):
 
     assert result["valid"] is False
     assert result["status"] == VerificationStatus.MALFORMED_DOCUMENT
-    assert "issuer_id does not match" in result["errors"][0]
+    assert "Missing issuer_pk_url for non-local issuer" in result["errors"][0]
 
 
 def test_verifier_resolves_local_issuer(monkeypatch, public_key_bytes):

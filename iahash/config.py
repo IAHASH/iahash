@@ -13,7 +13,12 @@ IAHASH_BASE_URL = os.getenv("IAHASH_BASE_URL", "http://localhost:8000")
 ISSUER_ID = os.getenv("IAHASH_ISSUER_ID", "iahash.local")
 
 # URL pública de la clave del emisor utilizada en los documentos IA-HASH
-ISSUER_PK_URL = os.getenv(
-    "IAHASH_ISSUER_PK_URL",
-    f"{IAHASH_BASE_URL}/keys/issuer_ed25519.pub",
-)
+#
+# Por defecto apuntamos al host oficial; se puede forzar a None dejando la
+# variable vacía ("") o sobreescribirla con la URL pública deseada.
+_env_pk_url = os.getenv("IAHASH_ISSUER_PK_URL")
+if _env_pk_url is not None and not _env_pk_url.strip():
+    _env_pk_url = None
+
+DEFAULT_ISSUER_PK_URL = "https://iahash.com/keys/issuer_ed25519.pub"
+ISSUER_PK_URL = _env_pk_url or DEFAULT_ISSUER_PK_URL

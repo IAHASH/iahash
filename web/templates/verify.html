@@ -66,9 +66,12 @@
           <select id="prompt-slug" class="input">
             <option value="">(opcional) Selecciona prompt maestro</option>
             {% for prompt in prompts %}
-              <option value="{{ prompt.id }}">{{ prompt.title }}</option>
+              <option value="{{ prompt.id }}" data-slug="{{ prompt.slug }}" data-h-public="{{ prompt.h_public or '' }}">{{ prompt.title }}</option>
             {% endfor %}
           </select>
+          <p class="muted" id="prompt-meta" style="margin-top:6px;">
+            <strong>Slug:</strong> <span data-meta="slug">—</span> · <strong>h_public:</strong> <span data-meta="h-public">—</span>
+          </p>
         </label>
         <label class="field-block">
           <span class="field-label">URL del chat</span>

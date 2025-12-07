@@ -97,6 +97,7 @@ def verify_document(
     6. Devolver estado + flags de validez y lista de errores.
     """
     errors: List[str] = []
+    warnings: List[str] = []
     status: VerificationStatus = VerificationStatus.MALFORMED_DOCUMENT
     differences: Optional[Dict[str, Any]] = None
     status_detail: Optional[str] = None
@@ -120,31 +121,49 @@ def verify_document(
             "normalized_prompt_text": None,
             "normalized_response_text": None,
             "differences": None,
-            "resolved_issuer_pk_url": None,
+            "resolved_issuer_pk_url": resolved_issuer_pk_url,
+            "warnings": warnings,
         }
 
     issuer_id = document.get("issuer_id")
     issuer_pk_url = document.get("issuer_pk_url")
 
-    # Compatibilidad con documentos locales antiguos: si falta issuer_pk_url
-    # pero el issuer_id coincide con el local, usamos ISSUER_PK_URL.
-    if not issuer_pk_url:
-        if issuer_id and issuer_id == ISSUER_ID:
-            issuer_pk_url = ISSUER_PK_URL
-        else:
-            status = VerificationStatus.MALFORMED_DOCUMENT
+    # Validación mínima del documento
+    required_fields = ["h_total", "signature", "timestamp"]
+    missing_fields = [field for field in required_fields if not document.get(field)]
+    if missing_fields:
+        status_detail = "MISSING_FIELDS"
+        return _fail(
+            status, f"Missing required fields: {', '.join(sorted(missing_fields))}"
+        )
+
+    # Resolución de issuer/clave pública
+    if not issuer_id:
+        status_detail = "MISSING_ISSUER"
+        return _fail(status, "Missing issuer_id in document")
+
+    if issuer_id == ISSUER_ID:
+        if not issuer_pk_url:
+            if ISSUER_PK_URL:
+                issuer_pk_url = ISSUER_PK_URL
+                warnings.append("issuer_pk_url ausente; se usa IAHASH_ISSUER_PK_URL")
+            else:
+                status_detail = "MISSING_ISSUER_PK_URL"
+                return _fail(status, "Missing issuer_pk_url for local issuer")
+        elif ISSUER_PK_URL and issuer_pk_url != ISSUER_PK_URL:
+            warnings.append("issuer_pk_url difiere de la configuración local")
+    else:
+        if not issuer_pk_url:
             status_detail = "MISSING_ISSUER_PK_URL"
-            return _fail(
-                status,
-                "Missing issuer_pk_url and issuer_id does not match local issuer",
-            )
+            return _fail(status, "Missing issuer_pk_url for non-local issuer")
+        warnings.append("issuer externo: verificación de clave remota requerida")
 
     resolved_issuer_pk_url = issuer_pk_url
 
     # 1) Cargar clave pública del issuer
     try:
         public_key = load_remote_public_key(
-            issuer_pk_url,
+            resolved_issuer_pk_url,
             timeout=timeout,
             use_cache=use_cache,
             key_cache=key_cache,
@@ -348,4 +367,5 @@ def verify_document(
         "normalized_response_text": normalized_response_text,
         "differences": differences,
         "resolved_issuer_pk_url": resolved_issuer_pk_url,
+        "warnings": warnings,
     }

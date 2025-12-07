@@ -45,8 +45,11 @@ function renderIssuedDocument(container, response) {
     documentData.store_raw && (normalizedPrompt || normalizedResponse);
 
   const iahId = documentData.iah_id || documentData.id || "—";
-  const statusText = (response?.status || "ISSUED").toString().toUpperCase();
+  const statusText =
+    (verification?.status || response?.status || "ISSUED").toString().toUpperCase();
+  const statusDetail = verification?.status_detail;
   const errors = verification.errors || response?.errors || [];
+  const warnings = verification.warnings || [];
 
   clearIAHASHContainer(container);
 
@@ -118,6 +121,10 @@ function renderIssuedDocument(container, response) {
         <h4>Errores</h4>
         <ul data-field="error-list"></ul>
       </div>
+      <div class="result-errors" data-field="warnings" style="display:none;">
+        <h4>Warnings</h4>
+        <ul data-field="warning-list"></ul>
+      </div>
       <div class="result-normalized" data-field="normalized" style="display:none;">
         <h4>Texto normalizado (store_raw)</h4>
         <div class="normalized-row">
@@ -150,7 +157,10 @@ function renderIssuedDocument(container, response) {
   };
 
   setText(".iah-id", iahId);
-  setText("[data-role='status']", statusText);
+  setText(
+    "[data-role='status']",
+    statusDetail ? `${statusText} · ${statusDetail}` : statusText,
+  );
   setText("[data-field='h_prompt']", documentData.h_prompt || documentData.hash_prompt);
   setText("[data-field='h_response']", documentData.h_response || documentData.hash_response);
   setText(
@@ -161,7 +171,9 @@ function renderIssuedDocument(container, response) {
   setText("[data-field='model']", documentData.model || "unknown");
   setText("[data-field='provider']", documentData.provider || "—");
   setText("[data-field='issuer']", documentData.issuer_id || "—");
-  setText("[data-field='issuer-url']", documentData.issuer_pk_url || "—");
+  const resolvedIssuerPk =
+    documentData.issuer_pk_url || verification.resolved_issuer_pk_url || "—";
+  setText("[data-field='issuer-url']", resolvedIssuerPk);
   setText("[data-field='timestamp']", documentData.timestamp || "—");
   setText(
     "[data-field='prompt-public']",
@@ -204,6 +216,22 @@ function renderIssuedDocument(container, response) {
       errorBox.style.display = "block";
     } else {
       errorBox.style.display = "none";
+    }
+  }
+
+  const warningBox = container.querySelector("[data-field='warnings']");
+  const warningList = container.querySelector("[data-field='warning-list']");
+  if (warningBox && warningList) {
+    if (warnings.length) {
+      warningList.innerHTML = "";
+      warnings.forEach((warn) => {
+        const li = document.createElement("li");
+        li.textContent = warn;
+        warningList.appendChild(li);
+      });
+      warningBox.style.display = "block";
+    } else {
+      warningBox.style.display = "none";
     }
   }
 

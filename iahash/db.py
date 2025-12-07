@@ -136,16 +136,24 @@ def get_prompt_by_id(prompt_id: int) -> Optional[Dict[str, Any]]:
         conn.close()
 
 
-def list_prompts() -> List[Dict[str, Any]]:
+def list_prompts(*, visibility: Optional[str] = None) -> List[Dict[str, Any]]:
     conn = get_connection()
     try:
+        where_clause = ""
+        params: Tuple[Any, ...] = ()
+        if visibility:
+            where_clause = "WHERE visibility = ?"
+            params = (visibility,)
+
         cur = conn.execute(
-            """
+            f"""
             SELECT id, slug, owner_id, title, description, category,
-                   is_master, visibility, created_at, updated_at
+                   is_master, visibility, h_public, created_at, updated_at
             FROM prompts
+            {where_clause}
             ORDER BY category, slug
-            """
+            """,
+            params,
         )
         return [dict(r) for r in cur.fetchall()]
     finally:
@@ -357,6 +365,7 @@ def _apply_schema(conn: sqlite3.Connection, *, bootstrap: bool) -> None:
 def _load_seed_data(conn: sqlite3.Connection) -> None:
     """Carga seed_prompts.sql si existe y aún no hay prompts."""
     if not SEED_PATH.exists():
+        logger.info("Seed file not found: %s", SEED_PATH)
         return
 
     try:
@@ -369,7 +378,12 @@ def _load_seed_data(conn: sqlite3.Connection) -> None:
     if prompt_count:
         return
 
-    conn.executescript(SEED_PATH.read_text(encoding="utf-8"))
+    try:
+        conn.executescript(SEED_PATH.read_text(encoding="utf-8"))
+        logger.info("Seed data loaded from %s", SEED_PATH)
+    except Exception:
+        logger.exception("Failed to load seed data from %s", SEED_PATH)
+        raise
 
 
 def store_iah_document(document: Dict[str, Any]) -> None:

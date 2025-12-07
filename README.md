@@ -195,6 +195,15 @@ Próximas mejoras:
 }
 ```
 
+### C. Manual de verificación rápida
+
+1. Borrar cualquier base de datos previa: `rm -f db/iahash.db`.
+2. Levantar el servidor (`uvicorn api.main:app --reload` o el stack Docker).
+3. Abrir `/prompts` y confirmar que aparece **CV Honesto Cognitivo**.
+4. Ir a `Verificar > Prompt+URL`, seleccionar el prompt `cv` y pegar una URL `chatgpt.com/share/...` de prueba.
+5. Copiar el JSON IA-HASH generado y pegarlo en el tab **Checker**.
+6. Verificar que el resultado es válido y que no aparece el error “Missing issuer_pk_url and issuer_id does not match local issuer”.
+
 ---
 
 > Última revisión: 2025-12-07 — Basado en versión `v1.2`, alineado con archivos `PROTOCOL_1.2.md`, `ARCHITECTURE_1.2.md`, `db.py`, `main.py`, `issuer.py`, `ROADMAP.md` y estructura real del sistema.
