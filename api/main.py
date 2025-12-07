@@ -217,7 +217,10 @@ def web_home(request: Request) -> Any:
 
 @app.get("/verify", response_class=HTMLResponse)
 def web_verify(request: Request) -> Any:
-    return templates.TemplateResponse("verify.html", {"request": request})
+    prompts = list_prompts(visibility="public")
+    return templates.TemplateResponse(
+        "verify.html", {"request": request, "prompts": prompts}
+    )
 
 
 @app.get("/compare", response_class=HTMLResponse)
@@ -237,7 +240,7 @@ def web_account(request: Request) -> Any:
 
 @app.get("/prompts", response_class=HTMLResponse)
 def web_prompts(request: Request) -> Any:
-    prompts = list_prompts()
+    prompts = list_prompts(visibility="public")
     return templates.TemplateResponse(
         "prompts.html", {"request": request, "prompts": prompts}
     )
@@ -265,7 +268,7 @@ def web_sequences(request: Request) -> Any:
 
 @app.get("/sequences/new", response_class=HTMLResponse)
 def web_sequences_new(request: Request) -> Any:
-    prompts = list_prompts()
+    prompts = list_prompts(visibility="public")
     return templates.TemplateResponse(
         "sequence_create.html", {"request": request, "prompts": prompts}
     )

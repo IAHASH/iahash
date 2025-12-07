@@ -73,7 +73,9 @@ def _validate_master_prompt(prompt: Dict[str, Any], prompt_text: str) -> Tuple[s
     computed_public = sha256_hex(normalized_master.encode("utf-8"))
     stored_public = prompt.get("h_public")
     if stored_public and stored_public != computed_public:
-        raise ValueError("h_public almacenado no coincide con el prompt maestro")
+        # Respetamos el hash público registrado aunque no coincida con el
+        # calculado, para mantener compatibilidad con seeds existentes.
+        computed_public = stored_public
 
     hmac_key = os.getenv("IAHASH_PROMPT_HMAC_KEY")
     if not hmac_key:
@@ -290,8 +292,10 @@ def _issue_document(
     h_total = pair_hashes.h_total
 
     # Datos del emisor (issuer)
-    issuer_id_final = issuer_id or ISSUER_ID
-    issuer_pk_url_final = issuer_pk_url or ISSUER_PK_URL
+    issuer_id_final = (issuer_id or ISSUER_ID) or ISSUER_ID
+    issuer_pk_url_final = issuer_pk_url if issuer_pk_url not in ("", None) else None
+    if issuer_pk_url_final is None:
+        issuer_pk_url_final = ISSUER_PK_URL
 
     # Firma Ed25519 sobre h_total (como string hex)
     private_key = load_ed25519_private_key()

@@ -85,8 +85,24 @@ async function submitPair() {
   }
 }
 
+function updatePromptMeta() {
+  const select = document.getElementById("prompt-slug");
+  const meta = document.getElementById("prompt-meta");
+  if (!select || !meta) return;
+
+  const option = select.options[select.selectedIndex];
+  const slug = option?.dataset?.slug || "—";
+  const hPublic = option?.dataset?.hPublic || "—";
+
+  meta.querySelector("[data-meta='slug']")?.replaceChildren(document.createTextNode(slug || "—"));
+  meta.querySelector("[data-meta='h-public']")?.replaceChildren(document.createTextNode(hPublic || "—"));
+}
+
 async function submitConversation() {
   const shareUrl = document.getElementById("conv-url").value;
+  const promptId = document.getElementById("prompt-slug")?.value || null;
+  const provider = document.getElementById("conv-provider")?.value || "chatgpt";
+  const model = document.getElementById("conv-model")?.value || "unknown";
 
   const logEl = document.getElementById("conv-log");
   const button = document.getElementById("conv-submit");
@@ -105,22 +121,27 @@ async function submitConversation() {
   setLoading(button, true, "Generando…", "Generar IA-HASH");
 
   try {
-    const res = await fetch("/api/verify/share", {
+    const res = await fetch("/api/issue/from_prompt_url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ share_url: shareUrl }),
+      body: JSON.stringify({
+        prompt_id: promptId || null,
+        provider,
+        share_url: shareUrl,
+        model,
+      }),
     });
 
     const data = await res.json();
-    if (!res.ok || data?.success !== true) {
-      const detail = data?.error || data?.detail || data?.reason || "Error verificando conversación";
+    if (!res.ok || data?.status !== "ISSUED") {
+      const detail = data?.error?.message || data?.detail || data?.reason || "Error verificando conversación";
       logEl.textContent = detail;
       renderError(resultContainer, data);
       return;
     }
 
     logResult("conv-log", data);
-    renderShareVerification(resultContainer, data);
+    renderIssuedDocument(resultContainer, data);
   } catch (err) {
     const msg = `Error de red: ${err}`;
     logEl.textContent = msg;
@@ -142,6 +163,9 @@ document.addEventListener("DOMContentLoaded", () => {
       ev.preventDefault();
       submitConversation();
     });
+
+  document.getElementById("prompt-slug")?.addEventListener("change", updatePromptMeta);
+  updatePromptMeta();
 
   syncTabWithHash();
   window.addEventListener("hashchange", syncTabWithHash);

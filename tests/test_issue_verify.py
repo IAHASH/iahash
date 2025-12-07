@@ -61,3 +61,39 @@ def test_verifier_detects_tampering(monkeypatch, temp_keys):
     assert any("Prompt" in error or "prompt" in error for error in result["errors"])
     assert result.get("normalized_prompt_text")
     assert result.get("differences", {}).get("hashes", {}).get("h_prompt")
+
+
+def test_issue_pair_carries_issuer(monkeypatch, temp_keys):
+    issuer_url = "https://issuer.local/pubkey.pem"
+
+    monkeypatch.setattr("iahash.config.ISSUER_ID", "iahash.local")
+    monkeypatch.setattr("iahash.verifier.ISSUER_ID", "iahash.local")
+    monkeypatch.setattr("iahash.issuer.ISSUER_ID", "iahash.local")
+
+    monkeypatch.setattr("iahash.config.ISSUER_PK_URL", issuer_url)
+    monkeypatch.setattr("iahash.verifier.ISSUER_PK_URL", issuer_url)
+    monkeypatch.setattr("iahash.issuer.ISSUER_PK_URL", issuer_url)
+    monkeypatch.setenv("IAHASH_KEYS_DIR", str(temp_keys))
+
+    public_key_bytes = (temp_keys / "issuer_ed25519.pub").read_bytes()
+
+    def fake_get(url, timeout=None):  # pragma: no cover - patched behaviour
+        assert url == issuer_url
+        return httpx.Response(200, request=httpx.Request("GET", url), content=public_key_bytes)
+
+    monkeypatch.setattr("iahash.verifier.httpx.get", fake_get)
+
+    doc = issue_pair(
+        prompt_text="Hola IA",
+        response_text="Hola humano",
+        model="gpt-test",
+        store_raw=True,
+    )
+
+    assert doc["issuer_id"] == "iahash.local"
+    assert doc["issuer_pk_url"] == issuer_url
+
+    result = verify_document(doc)
+
+    assert result["valid"] is True
+    assert result["resolved_issuer_pk_url"] == issuer_url
