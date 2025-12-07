@@ -71,8 +71,10 @@ def test_issue_from_share_endpoint(temp_keys, monkeypatch):
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["model"] == "gpt-4o"
-    assert data.get("conversation_url") == "https://chatgpt.com/share/abc123"
-    assert data.get("prompt_id") == "P-123"
-    assert data.get("h_prompt")
-    assert data.get("h_response")
+    assert data["status"] == "ISSUED"
+    document = data.get("document") or {}
+    assert document["model"] == "gpt-4o"
+    assert document.get("conversation_url") == "https://chatgpt.com/share/abc123"
+    assert document.get("prompt_id") == "P-123"
+    assert document.get("h_prompt")
+    assert document.get("h_response")

@@ -17,6 +17,7 @@ from iahash.db import (
     create_sequence,
     ensure_db_initialized,
     get_iah_document_by_id,
+    get_prompt_by_id,
     get_prompt_by_slug,
     get_sequence_by_slug,
     list_prompts,
@@ -24,8 +25,12 @@ from iahash.db import (
 )
 from iahash.config import ISSUER_PK_URL
 from iahash.crypto import get_issuer_public_key_pem
-from iahash.extractors.chatgpt_share import extract_payload_from_chatgpt_share
+from iahash.extractors.chatgpt_share import (
+    extract_chatgpt_share,
+    extract_payload_from_chatgpt_share,
+)
 from iahash.issuer import PROTOCOL_VERSION, issue_conversation, issue_from_share, issue_pair
+from iahash.extractors.exceptions import UnsupportedProvider, UnreachableSource
 from iahash.verifier import verify_document
 
 APP_NAME = "IA-HASH API"
@@ -70,6 +75,45 @@ class IssueFromSharePayload(BaseModel):
     model: str | None = "chatgpt"
     prompt_id: str | None = None
     subject_id: str | None = None
+
+
+class IssueFromPromptUrlPayload(BaseModel):
+    prompt_id: str | None = None
+    provider: str = "chatgpt"
+    share_url: HttpUrl
+    model: str | None = None
+    subject_id: str | None = None
+
+
+def _issue_response(document: Dict[str, Any]) -> Dict[str, Any]:
+    """Uniform response envelope for issuing endpoints."""
+
+    return {"status": "ISSUED", "document": document}
+
+
+def _resolve_prompt_id(prompt_id: Optional[str]) -> Optional[str]:
+    if prompt_id is None:
+        return None
+
+    prompt_record = None
+    try:
+        prompt_record = get_prompt_by_slug(str(prompt_id))
+    except Exception:
+        prompt_record = None
+
+    if prompt_record is None:
+        try:
+            prompt_int = int(prompt_id)
+        except (TypeError, ValueError):
+            prompt_int = None
+
+        if prompt_int is not None:
+            prompt_record = get_prompt_by_id(prompt_int)
+
+    if prompt_record is None:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    return str(prompt_record.get("id") or prompt_id)
 
 
 class SequenceStepPayload(BaseModel):
@@ -197,6 +241,8 @@ def api_info() -> Dict[str, Any]:
         "endpoints": {
             "pair_issue": "/api/verify/pair",
             "conversation_issue": "/api/verify/conversation",
+            "issue_from_prompt_url": "/api/issue/from_prompt_url",
+            "issue_from_prompt_url_deprecated": "/api/verify/prompt_url",
             "check": "/api/check",
             "prompts": "/api/prompts",
             "prompt": "/api/prompts/{slug}",
@@ -241,7 +287,7 @@ def get_public_key() -> Dict[str, str]:
 @app.post("/api/verify/pair")
 def api_verify_pair(payload: IssuePairRequest) -> Dict[str, Any]:
     try:
-        return issue_pair(
+        document = issue_pair(
             prompt_text=payload.prompt_text,
             response_text=payload.response_text,
             prompt_id=payload.prompt_id,
@@ -251,6 +297,7 @@ def api_verify_pair(payload: IssuePairRequest) -> Dict[str, Any]:
             subject_id=payload.subject_id,
             store_raw=payload.store_raw,
         )
+        return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -258,7 +305,7 @@ def api_verify_pair(payload: IssuePairRequest) -> Dict[str, Any]:
 @app.post("/api/verify/conversation")
 def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]:
     try:
-        return issue_conversation(
+        document = issue_conversation(
             prompt_text=payload.prompt_text,
             response_text=payload.response_text,
             prompt_id=payload.prompt_id,
@@ -270,6 +317,7 @@ def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]
             subject_id=payload.subject_id,
             store_raw=payload.store_raw,
         )
+        return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -311,7 +359,7 @@ async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]
         raise HTTPException(status_code=400, detail="No se pudo extraer prompt o respuesta")
 
     try:
-        return issue_from_share(
+        document = issue_from_share(
             prompt_text=prompt_text,
             response_text=response_text,
             model=model_value,
@@ -319,8 +367,77 @@ async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]
             prompt_id=payload.prompt_id,
             subject_id=payload.subject_id,
         )
+        return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _issue_prompt_from_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]:
+    provider = (payload.provider or "").lower()
+    if provider and provider != "chatgpt":
+        raise HTTPException(status_code=400, detail="Unsupported provider")
+
+    share_url = str(payload.share_url)
+
+    resolved_prompt_id = _resolve_prompt_id(payload.prompt_id)
+
+    try:
+        extracted = extract_chatgpt_share(share_url)
+    except UnsupportedProvider as exc:
+        raise HTTPException(status_code=400, detail="Invalid or unsupported share URL") from exc
+    except UnreachableSource as exc:  # pragma: no cover - network defensive
+        raise HTTPException(status_code=400, detail="Cannot fetch ChatGPT share URL") from exc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(
+            status_code=500, detail="Unexpected error extracting conversation"
+        ) from exc
+
+    prompt_text = extracted.get("prompt_text")
+    response_text = extracted.get("response_text")
+
+    if not prompt_text or not response_text:
+        raise HTTPException(
+            status_code=400, detail="Cannot extract conversation from share URL"
+        )
+
+    model_value = (
+        extracted.get("model")
+        or payload.model
+        or ("chatgpt" if provider == "chatgpt" else "unknown")
+    )
+    if model_value == "unknown" and not payload.model:
+        model_value = "chatgpt" if provider == "chatgpt" else "unknown"
+    if not model_value:
+        model_value = "chatgpt" if provider == "chatgpt" else "unknown"
+
+    try:
+        document = issue_from_share(
+            prompt_text=prompt_text,
+            response_text=response_text,
+            model=model_value,
+            share_url=share_url,
+            prompt_id=resolved_prompt_id,
+            subject_id=payload.subject_id,
+            store_raw=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail="Unexpected issuing error") from exc
+
+    return _issue_response(document)
+
+
+@app.post("/api/issue/from_prompt_url")
+def api_issue_from_prompt_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]:
+    return _issue_prompt_from_url(payload)
+
+
+@app.post("/api/verify/prompt_url", deprecated=True)
+def api_verify_prompt_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]:
+    """Deprecated alias kept for backward compatibility."""
+
+    return _issue_prompt_from_url(payload)
 
 
 @app.get("/api/prompts")

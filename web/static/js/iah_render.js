@@ -1,17 +1,40 @@
+function clearIAHASHContainer(container) {
+  if (!container) return;
+  container.innerHTML = "";
+  container.style.display = "none";
+  container.className = "result-card";
+}
+
+function renderIAHASHError(container, message) {
+  if (!container) return;
+  clearIAHASHContainer(container);
+  container.classList.add("verify-result", "verify-result--error");
+  container.innerHTML = `<strong>Error:</strong> <span style="margin-left: 6px;">${
+    message || "Ocurrió un error"
+  }</span>`;
+  container.style.display = "block";
+}
+
 function renderIAHASHResult(container, iahashDoc) {
   if (!container) return;
-  const documentData = iahashDoc.document || iahashDoc || {};
-  const verification = iahashDoc.verification || {};
-  const iahId = documentData.iah_id || documentData.id || "—";
-  const statusText =
-    verification.status || documentData.status || documentData.state || "PENDING";
-  const errors = verification.errors || iahashDoc.errors || [];
+
+  const documentData = iahashDoc?.document || iahashDoc || {};
+  const verification = iahashDoc?.verification || {};
   const normalizedPrompt = verification.normalized_prompt_text;
   const normalizedResponse = verification.normalized_response_text;
   const shouldShowNormalized =
     documentData.store_raw && (normalizedPrompt || normalizedResponse);
 
-  container.classList.add("result-card");
+  const iahId = documentData.iah_id || documentData.id || "—";
+  const statusText =
+    (iahashDoc?.status || documentData.status || documentData.state || "ISSUED")
+      .toString()
+      .toUpperCase();
+
+  const errors = verification.errors || iahashDoc?.errors || [];
+
+  clearIAHASHContainer(container);
+
   container.innerHTML = `
     <div class="result-card__head">
       <div>
@@ -21,6 +44,28 @@ function renderIAHASHResult(container, iahashDoc) {
       <div class="result-head-actions">
         <button type="button" class="button-secondary copy-json">Copiar JSON</button>
         <span class="badge" data-role="status">${statusText}</span>
+      </div>
+    </div>
+    <div class="result-summary">
+      <div>
+        <p class="muted label">Modelo</p>
+        <p class="mono" data-field="model">—</p>
+      </div>
+      <div>
+        <p class="muted label">Proveedor</p>
+        <p class="mono" data-field="provider">—</p>
+      </div>
+      <div>
+        <p class="muted label">Timestamp</p>
+        <p class="mono" data-field="timestamp">—</p>
+      </div>
+      <div>
+        <p class="muted label">Hash público del prompt</p>
+        <p class="mono" data-field="prompt-public">—</p>
+      </div>
+      <div>
+        <p class="muted label">Conversation URL</p>
+        <p class="mono" data-field="conversation-url">—</p>
       </div>
     </div>
     <div class="result-grid">
@@ -39,10 +84,6 @@ function renderIAHASHResult(container, iahashDoc) {
       <div>
         <p class="muted label">Firma</p>
         <p class="mono" data-field="signature">—</p>
-      </div>
-      <div>
-        <p class="muted label">Modelo</p>
-        <p class="mono" data-field="model">—</p>
       </div>
       <div>
         <p class="muted label">Issuer ID</p>
@@ -79,31 +120,46 @@ function renderIAHASHResult(container, iahashDoc) {
   const setText = (selector, value) => {
     const el = container.querySelector(selector);
     if (el) {
+      if (selector === "[data-field='conversation-url']" && value) {
+        el.textContent = "";
+        const link = document.createElement("a");
+        link.href = value;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        link.textContent = value;
+        el.appendChild(link);
+        return;
+      }
       el.textContent = value ?? "—";
     }
   };
 
   setText(".iah-id", iahId);
+  setText("[data-role='status']", statusText);
   setText("[data-field='h_prompt']", documentData.h_prompt || documentData.hash_prompt);
-  setText(
-    "[data-field='h_response']",
-    documentData.h_response || documentData.hash_response,
-  );
+  setText("[data-field='h_response']", documentData.h_response || documentData.hash_response);
   setText(
     "[data-field='h_total']",
     documentData.h_total || documentData.hash_total || documentData.h_iah,
   );
   setText("[data-field='signature']", documentData.signature || documentData.firma_total);
   setText("[data-field='model']", documentData.model || "unknown");
+  setText("[data-field='provider']", documentData.provider || "—");
   setText("[data-field='issuer']", documentData.issuer_id || "—");
   setText("[data-field='issuer-url']", documentData.issuer_pk_url || "—");
+  setText("[data-field='timestamp']", documentData.timestamp || "—");
+  setText(
+    "[data-field='prompt-public']",
+    documentData.prompt_public_hash || documentData.h_public || "—",
+  );
+  setText("[data-field='conversation-url']", documentData.conversation_url || "");
 
   const statusEl = container.querySelector("[data-role='status']");
   if (statusEl) {
-    const normalized = statusText?.toUpperCase?.() || "PENDING";
+    const normalized = statusText || "ISSUED";
     statusEl.textContent = normalized;
     statusEl.className = "badge " +
-      (normalized === "VERIFIED"
+      (normalized.includes("VERIFIED")
         ? "badge--ok"
         : normalized.includes("INVALID")
         ? "badge--error"
@@ -163,16 +219,6 @@ function renderIAHASHResult(container, iahashDoc) {
   });
 }
 
-function showError(container, message) {
-  if (!container) return;
-  container.classList.add("verify-result", "verify-result--error");
-  container.textContent = "";
-  const strong = document.createElement("strong");
-  strong.textContent = "Error:";
-  const span = document.createElement("span");
-  span.style.marginLeft = "6px";
-  span.textContent = message;
-  container.appendChild(strong);
-  container.appendChild(span);
-  container.style.display = "block";
-}
+window.renderIAHASHResult = renderIAHASHResult;
+window.renderIAHASHError = renderIAHASHError;
+window.clearIAHASHContainer = clearIAHASHContainer;

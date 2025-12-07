@@ -64,8 +64,9 @@ def test_verify_conversation_success(temp_keys, monkeypatch):
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["model"] == "gpt-4o"
-    assert data["provider"] == "chatgpt"
+    document = data.get("document") or {}
+    assert document.get("model") == "gpt-4o"
+    assert document.get("provider") == "chatgpt"
 
 
 def test_verify_conversation_unreachable(temp_keys, monkeypatch):

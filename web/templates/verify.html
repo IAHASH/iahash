@@ -43,7 +43,7 @@
           </label>
           <div class="field-block">
             <span class="field-label">&nbsp;</span>
-            <button class="button" type="submit">Generar IA-HASH</button>
+            <button class="button" type="submit" id="pair-submit">Generar IA-HASH</button>
           </div>
         </div>
         <pre id="pair-log" class="muted result-raw"></pre>
@@ -93,7 +93,7 @@
           </label>
           <div class="field-block">
             <span class="field-label">&nbsp;</span>
-            <button class="button" type="submit">Generar IA-HASH</button>
+            <button class="button" type="submit" id="conv-submit">Generar IA-HASH</button>
           </div>
         </div>
         <pre id="conv-log" class="muted result-raw"></pre>
@@ -126,70 +126,9 @@
     </div>
   </div>
 
-  <div class="result-card" id="result-card" style="display:none;">
-    <div class="result-card__head">
-      <div>
-        <p class="muted">Resultado IA-HASH</p>
-        <h3 id="result-iah-id">—</h3>
-      </div>
-      <div class="result-head-actions">
-        <button type="button" class="button-secondary" id="copy-json-btn">Copiar JSON</button>
-        <span class="badge" id="result-status">Pendiente</span>
-      </div>
-    </div>
-    <div class="result-grid">
-      <div>
-        <p class="muted label">h_prompt</p>
-        <p id="result-hash-prompt" class="mono">—</p>
-      </div>
-      <div>
-        <p class="muted label">h_response</p>
-        <p id="result-hash-response" class="mono">—</p>
-      </div>
-      <div>
-        <p class="muted label">h_total</p>
-        <p id="result-hash-total" class="mono">—</p>
-      </div>
-      <div>
-        <p class="muted label">Firma</p>
-        <p id="result-signature" class="mono">—</p>
-      </div>
-      <div>
-        <p class="muted label">Modelo</p>
-        <p id="result-model" class="mono">—</p>
-      </div>
-      <div>
-        <p class="muted label">Issuer ID</p>
-        <p id="result-issuer" class="mono">—</p>
-      </div>
-      <div>
-        <p class="muted label">issuer_pk_url</p>
-        <p id="result-issuer-url" class="mono">—</p>
-      </div>
-    </div>
-    <details class="result-details">
-      <summary>Ver JSON completo</summary>
-      <pre id="result-raw" class="result-raw muted">(sin datos)</pre>
-    </details>
-    <div class="result-meta-grid">
-      <div class="result-errors" id="result-errors" style="display:none;">
-        <h4>Errores</h4>
-        <ul id="error-list"></ul>
-      </div>
-      <div class="result-normalized" id="normalized-container" style="display:none;">
-        <h4>Texto normalizado (store_raw)</h4>
-        <div class="normalized-row">
-          <p class="muted label">Prompt</p>
-          <pre id="normalized-prompt" class="result-raw"></pre>
-        </div>
-        <div class="normalized-row">
-          <p class="muted label">Respuesta</p>
-          <pre id="normalized-response" class="result-raw"></pre>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div class="result-card" id="result-card" style="display:none;"></div>
 
-  <script src="/static/js/iah_result.js"></script>
-  <script src="/static/js/verify.js"></script>
+  <script src="/static/js/iah_render.js"></script>
+  <script src="/static/js/pair.js"></script>
+  <script src="/static/js/checker.js"></script>
 {% endblock %}
