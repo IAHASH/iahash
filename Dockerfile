@@ -5,9 +5,13 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Minimal build tools for cryptography + curl for healthcheck
+# Minimal build tools para cryptography + curl/wget para healthcheck
 RUN apt-get update \
- && apt-get install -y --no-install-recommends build-essential curl sqlite3 \
+ && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        wget \
+        sqlite3 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
