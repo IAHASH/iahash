@@ -26,87 +26,6 @@ function renderResult(targetId, data, fallbackError) {
   }
 }
 
-const STATUS_UI = {
-  VERIFIED: { label: "VERIFICADO", className: "badge--ok" },
-  INVALID_SIGNATURE: { label: "FIRMA INVÁLIDA", className: "badge--error" },
-  UNREACHABLE_ISSUER: { label: "FUENTE NO VERIFICABLE", className: "badge--warn" },
-  MALFORMED_DOCUMENT: { label: "DOCUMENTO IA-HASH INVÁLIDO", className: "badge--error" },
-  UNSUPPORTED_PROVIDER: { label: "FUENTE NO VERIFICABLE", className: "badge--warn" },
-};
-
-function setStatusBadge(statusText) {
-  const badge = document.getElementById("result-status");
-  if (!badge) return;
-
-  const normalized = statusText?.toUpperCase?.() || "PENDING";
-  const meta = STATUS_UI[normalized] || { label: normalized, className: "badge--pending" };
-  badge.textContent = meta.label;
-  badge.className = `badge ${meta.className}`;
-}
-
-function updateResultCard(data) {
-  if (!data) return;
-  const card = document.getElementById("result-card");
-  if (!card) return;
-
-  const documentData = data.document || data;
-  const verification = data.verification || {};
-  const iahId = documentData.iah_id || documentData.id || "—";
-  const status =
-    verification.status || documentData.status || documentData.state || documentData.validation?.status || "PENDING";
-
-  document.getElementById("result-iah-id").textContent = iahId;
-  document.getElementById("result-hash-prompt").textContent =
-    documentData.h_prompt || documentData.hash_prompt || "—";
-  document.getElementById("result-hash-response").textContent =
-    documentData.h_response || documentData.hash_response || "—";
-  document.getElementById("result-hash-total").textContent =
-    documentData.h_total || documentData.hash_total || documentData.h_iah || "—";
-  document.getElementById("result-signature").textContent =
-    documentData.signature || documentData.firma_total || "—";
-  document.getElementById("result-model").textContent = documentData.model || "unknown";
-  document.getElementById("result-issuer").textContent = documentData.issuer_id || "—";
-  document.getElementById("result-issuer-url").textContent = documentData.issuer_pk_url || "—";
-  setStatusBadge(status.toUpperCase());
-
-  renderResult("result-raw", data, "No se pudo serializar el resultado");
-  const errors = verification.errors || data.errors || [];
-  const errorList = document.getElementById("error-list");
-  const errorBox = document.getElementById("result-errors");
-  if (errorList && errorBox) {
-    errorList.innerHTML = "";
-    if (errors.length > 0) {
-      errors.forEach((err) => {
-        const li = document.createElement("li");
-        li.textContent = err;
-        errorList.appendChild(li);
-      });
-      errorBox.style.display = "block";
-    } else {
-      errorBox.style.display = "none";
-    }
-  }
-
-  const normalizedBox = document.getElementById("normalized-container");
-  if (normalizedBox) {
-    const normalizedPrompt = verification.normalized_prompt_text;
-    const normalizedResponse = verification.normalized_response_text;
-    const shouldShow = documentData.store_raw && (normalizedPrompt || normalizedResponse);
-
-    if (shouldShow) {
-      document.getElementById("normalized-prompt").textContent =
-        normalizedPrompt || "(sin prompt normalizado)";
-      document.getElementById("normalized-response").textContent =
-        normalizedResponse || "(sin respuesta normalizada)";
-      normalizedBox.style.display = "grid";
-    } else {
-      normalizedBox.style.display = "none";
-    }
-  }
-
-  card.style.display = "grid";
-}
-
 async function submitPair() {
   const payload = {
     prompt_text: document.getElementById("pair-prompt").value,
@@ -132,7 +51,7 @@ async function submitPair() {
     }
 
     renderResult("pair-log", data);
-    updateResultCard(data);
+    renderIAHASHResult(document.getElementById("result-card"), data);
   } catch (err) {
     logEl.textContent = `Error de red: ${err}`;
   }
@@ -164,7 +83,7 @@ async function submitConversation() {
     }
 
     renderResult("conv-log", data);
-    updateResultCard(data);
+    renderIAHASHResult(document.getElementById("result-card"), data);
   } catch (err) {
     logEl.textContent = `Error de red: ${err}`;
   }
@@ -197,7 +116,7 @@ async function submitChecker() {
     }
 
     renderResult("checker-log", data);
-    updateResultCard(data);
+    renderIAHASHResult(document.getElementById("result-card"), data);
   } catch (err) {
     logEl.textContent = `Error de red: ${err}`;
   }
@@ -208,26 +127,6 @@ function syncTabWithHash() {
   if (TAB_KEYS.includes(hash)) {
     showTab(hash);
   }
-}
-
-function copyResultJson() {
-  const rawEl = document.getElementById("result-raw");
-  const btn = document.getElementById("copy-json-btn");
-  const text = rawEl?.textContent || "";
-  if (!text.trim() || text.includes("(sin datos)")) return;
-
-  navigator.clipboard
-    ?.writeText(text)
-    .then(() => {
-      if (btn) {
-        const original = btn.textContent;
-        btn.textContent = "Copiado";
-        setTimeout(() => {
-          btn.textContent = original;
-        }, 1500);
-      }
-    })
-    .catch(() => {});
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -247,8 +146,6 @@ document.addEventListener("DOMContentLoaded", () => {
     ev.preventDefault();
     submitChecker();
   });
-
-  document.getElementById("copy-json-btn")?.addEventListener("click", copyResultJson);
 
   syncTabWithHash();
   window.addEventListener("hashchange", syncTabWithHash);

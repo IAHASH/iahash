@@ -46,10 +46,11 @@
     </div>
 
     <!-- IMPORTANTE: ahora enviamos prompt.id, NO el slug -->
-    <button class="button" style="margin-top: 10px;" onclick="verifyConversation({{ prompt.id }})">
+    <button class="button" style="margin-top: 10px;" onclick="verifyShareWithIAHASH({{ prompt.id }})">
       Verificar con IA-HASH
     </button>
 
+    <div id="conv-result" class="result-card" style="display:none; margin-top: 10px;"></div>
     <pre id="conv-log" class="muted" style="margin-top: 10px;"></pre>
   </div>
 
@@ -58,6 +59,7 @@
     <p class="muted">Próximamente: aquí aparecerán los últimos IA-HASH emitidos para este prompt.</p>
   </div>
 
+  <script src="/static/js/iah_result.js"></script>
   <script src="/static/js/prompt_detail.js"></script>
 
 {% endblock %}
