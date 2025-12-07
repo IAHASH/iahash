@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 from cryptography.hazmat.primitives import serialization
@@ -10,6 +10,9 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from iahash.crypto import normalize_text, sha256_hex, verify_signature
 from iahash.issuer import PROTOCOL_VERSION, build_total_hash_string
+
+
+_PUBLIC_KEY_CACHE: Dict[str, Ed25519PublicKey] = {}
 
 
 class VerificationStatus:
@@ -21,17 +24,51 @@ class VerificationStatus:
     UNKNOWN = "UNKNOWN"
 
 
-def load_remote_public_key(url: str) -> Ed25519PublicKey:
+def load_remote_public_key(
+    url: str,
+    *,
+    timeout: float = 10.0,
+    key_cache: Optional[Dict[str, Ed25519PublicKey]] = None,
+    use_cache: bool = False,
+) -> Ed25519PublicKey:
     """
     Descarga y carga una clave pública Ed25519 desde una URL (PEM).
     """
-    response = httpx.get(url, timeout=10)
-    response.raise_for_status()
+    if not url:
+        raise ValueError("issuer_pk_url is required")
+
+    cache_store = key_cache if key_cache is not None else (_PUBLIC_KEY_CACHE if use_cache else None)
+    if cache_store is not None and url in cache_store:
+        return cache_store[url]
+
+    try:
+        response = httpx.get(url, timeout=timeout)
+        response.raise_for_status()
+    except httpx.TimeoutException as exc:
+        raise TimeoutError(f"Timeout fetching issuer public key from {url}") from exc
+    except httpx.HTTPStatusError as exc:
+        raise ConnectionError(
+            f"Failed to fetch issuer public key from {url}: {exc.response.status_code}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise ConnectionError(f"Unable to fetch issuer public key from {url}: {exc}") from exc
+
     data = response.content
-    return serialization.load_pem_public_key(data)
+    public_key = serialization.load_pem_public_key(data)
+
+    if cache_store is not None:
+        cache_store[url] = public_key
+
+    return public_key
 
 
-def verify_document(document: Dict[str, Any]) -> Dict[str, Any]:
+def verify_document(
+    document: Dict[str, Any],
+    *,
+    timeout: float = 10.0,
+    use_cache: bool = False,
+    key_cache: Optional[Dict[str, Ed25519PublicKey]] = None,
+) -> Dict[str, Any]:
     """
     Verifica un documento IA-HASH completo.
 
@@ -45,10 +82,8 @@ def verify_document(document: Dict[str, Any]) -> Dict[str, Any]:
     errors: List[str] = []
     status = VerificationStatus.UNKNOWN
 
-    # 1) Cargar clave pública
-    try:
-        public_key = load_remote_public_key(document["issuer_pk_url"])
-    except Exception:
+    issuer_pk_url = document.get("issuer_pk_url")
+    if not issuer_pk_url:
         status = VerificationStatus.UNREACHABLE_SOURCE
         return {
             "valid": False,
@@ -56,7 +91,33 @@ def verify_document(document: Dict[str, Any]) -> Dict[str, Any]:
             "signature_valid": False,
             "hash_valid": False,
             "prompt_match": False,
-            "errors": ["Unable to fetch public key"],
+            "errors": ["issuer_pk_url is required"],
+        }
+
+    # 1) Cargar clave pública
+    try:
+        public_key = load_remote_public_key(
+            issuer_pk_url, timeout=timeout, use_cache=use_cache, key_cache=key_cache
+        )
+    except (ValueError, TimeoutError, ConnectionError) as exc:
+        status = VerificationStatus.UNREACHABLE_SOURCE
+        return {
+            "valid": False,
+            "status": status,
+            "signature_valid": False,
+            "hash_valid": False,
+            "prompt_match": False,
+            "errors": [str(exc)],
+        }
+    except Exception as exc:  # pragma: no cover - fallback for unexpected errors
+        status = VerificationStatus.UNREACHABLE_SOURCE
+        return {
+            "valid": False,
+            "status": status,
+            "signature_valid": False,
+            "hash_valid": False,
+            "prompt_match": False,
+            "errors": [f"Unable to fetch public key: {exc}"],
         }
 
     # 2) Verificar firma
