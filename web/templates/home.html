@@ -1,193 +1,187 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="utf-8" />
     <title>IA-HASH · Prompt + Respuesta verificables</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="wrap">
+        <!-- HEADER -->
+        <header class="page-header">
+          <div class="header-inner">
+            <a href="/" class="nav-logo">
+              <img src="/static/logo.png" alt="IA-HASH" />
+              <div>
+                <div class="site-title">IA-HASH</div>
+                <div class="site-tagline">Prompt + Respuesta verificables</div>
+              </div>
+            </a>
+            <nav class="nav">
+              <div class="nav-links">
+                <a href="/">Inicio</a>
+                <a href="/emit" class="nav-strong">Emitir</a>
+                <a href="/verify">Verificar</a>
+                <a href="/docs">Docs / Help</a>
+                <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">
+                  GitHub
+                </a>
+              </div>
+            </nav>
+          </div>
+        </header>
 
-    <!-- CSS principal -->
-    <link rel="stylesheet" href="/static/styles.css">
+        <main>
+          <!-- HERO -->
+          <section class="hero">
+            <div class="hero-inner">
+              <!-- Columna izquierda -->
+              <div class="hero-copy">
+                <div class="pill-row">
+                  <div class="pill pill-soft">NEUTRAL · OFFLINE · Ed25519</div>
+                </div>
 
-    <!-- Favicon (opcional, usa el logo actual) -->
-    <link rel="icon" type="image/png" href="/static/logo.png">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
-<body class="page">
+                <h1 class="hero-lead">
+                  Firma y verifica cualquier <span class="highlight">Prompt + Respuesta IA</span>
+                </h1>
 
-<header class="topbar">
-    <div class="topbar-left">
-        <a href="/" class="brand">
-            <img src="/static/logo.png" alt="IA-HASH" class="brand-logo">
-            <div class="brand-text">
-                <span class="brand-title">IA-HASH</span>
-                <span class="brand-subtitle">Prompt + Respuesta verificables</span>
-            </div>
-        </a>
-        <span class="status-pill">NEUTRAL · OFFLINE · Ed25519</span>
-    </div>
-
-    <nav class="nav">
-        <a href="#inicio">Inicio</a>
-        <a href="#emitir">Emitir</a>
-        <a href="#verificar">Verificar</a>
-        <a href="#docs">Docs / Help</a>
-        <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">GitHub</a>
-    </nav>
-</header>
-
-<main class="main">
-
-    <!-- HERO + VERIFICAR -->
-    <section id="inicio" class="hero-grid">
-        <section class="hero">
-            <h1>Firma y verifica cualquier <span class="accent">Prompt + Respuesta IA</span></h1>
-
-            <p class="hero-lead">
-                IA-HASH crea un JSON firmable con hashes SHA256 y firma Ed25519.
-                Funciona con ChatGPT, Claude, modelos locales o cualquier LLM.
-                Verificación offline, años después, sin depender de terceros.
-            </p>
-
-            <ul class="hero-list">
-                <li>✔ Integridad total del prompt y de la respuesta</li>
-                <li>✔ Firma criptográfica del emisor (Ed25519)</li>
-                <li>✔ Verificación offline, sin blockchain</li>
-                <li>✔ Independiente de proveedor y de modelo</li>
-            </ul>
-
-            <p class="hero-note">
-                Emite IA-HASH desde tus prompts o pega un documento JSON en la derecha
-                para comprobar si está <span class="tag">IA-HASH VERIFIED</span>.
-            </p>
-        </section>
-
-        <aside class="card verify-card" id="verificar">
-            <header class="card-header">
-                <h2>Verificar documento IA-HASH</h2>
-                <p class="card-subtitle">
-                    Pega el JSON emitido por tu asistente o backend IA y validamos hash + firma.
+                <p>
+                  IA-HASH crea un JSON firmable con hashes SHA256 y firma Ed25519.
+                  Funciona con ChatGPT, Claude, modelos locales o cualquier LLM.
+                  Verificación offline, años después, sin depender de terceros.
                 </p>
-            </header>
 
-            <label class="field">
-                <span class="field-label">IA-HASH JSON</span>
-                <textarea
-                    id="verify-json"
-                    class="textarea textarea-code"
+                <ul class="hero-list">
+                  <li>Integridad total del prompt y de la respuesta</li>
+                  <li>Firma criptográfica del emisor (Ed25519)</li>
+                  <li>Verificación offline, sin blockchain</li>
+                  <li>Independiente de proveedor y de modelo</li>
+                </ul>
+
+                <div class="button-row">
+                  <a href="#emitir" class="button-verified">Emitir IA-HASH</a>
+                  <a href="#verificar" class="button-secondary">Verificar documento</a>
+                </div>
+              </div>
+
+              <!-- Columna derecha: verificador rápido -->
+              <aside class="hero-card">
+                <span class="badge-status badge-status--ok">
+                  <span class="badge-dot"></span>
+                  <span class="badge-label">IA-HASH v1 · Protocolo mínimo</span>
+                </span>
+
+                <h2 style="font-size: 14px; margin: 6px 0 2px;">
+                  Verificar documento IA-HASH
+                </h2>
+                <p class="card-subtitle">
+                  Pega el JSON emitido por tu asistente o backend IA y validamos hash + firma.
+                </p>
+
+                <div class="field-group verify-column">
+                  <label for="verify-json-hero" class="field-label">IA-HASH JSON</label>
+                  <textarea
+                    id="verify-json-hero"
+                    class="field-textarea mono"
                     placeholder='{
   "version": "IA-HASH v1",
   "prompt_id": "cv_honesto_v4",
   "prompt_master": "Prompt exacto enviado a la IA...",
   "respuesta": "Salida generada por la IA...",
-  "modelo": "gpt-5.1-thinking",
-  "hash_total": "..."
-}'></textarea>
-            </label>
+  "modelo": "gpt-5.1-thinking"
+}'
+                  ></textarea>
+                </div>
 
-            <div class="actions actions-inline">
-                <button id="btn-verify" class="btn btn-primary">Verificar IA-HASH</button>
-                <button id="btn-clear-verify" class="btn btn-ghost">Limpiar</button>
+                <div class="button-row">
+                  <button type="button" id="verify-hero-btn" class="button-verified">
+                    Verificar IA-HASH
+                  </button>
+                  <button type="button" id="verify-hero-clear" class="button-secondary">
+                    Limpiar
+                  </button>
+                </div>
+
+                <div id="verify-hero-result" class="verify-result verify-result--idle">
+                  <strong>Esperando JSON…</strong>
+                  <span class="field-note">
+                    Comprobamos <code>hash_total</code>, firma Ed25519 y metadatos básicos.
+                  </span>
+                </div>
+              </aside>
             </div>
+          </section>
 
-            <pre id="verify-result" class="verify-result" aria-live="polite"></pre>
-        </aside>
-    </section>
+          <!-- EMITIR / VERIFICAR PRINCIPAL -->
+          <section class="section" id="emitir">
+            <div class="layout">
+              <!-- Columna izquierda: emitir -->
+              <div class="zone">
+                <div class="zone-header">
+                  <div class="zone-title">Emitir IA-HASH desde Prompt + Respuesta</div>
+                  <p class="field-note">
+                    Pega el prompt exacto y la respuesta completa de tu IA. Generaremos un
+                    documento IA-HASH firmable que puedes guardar en tu SQL, adjuntar a un PDF
+                    o compartir.
+                  </p>
+                </div>
 
-    <!-- EMITIR IA-HASH -->
-    <section id="emitir" class="card emit-card">
-        <header class="card-header">
-            <h2>Emitir IA-HASH desde Prompt + Respuesta</h2>
-            <p class="card-subtitle">
-                Pega el prompt exacto que usaste con la IA y la respuesta completa.
-                Generaremos un documento IA-HASH firmable que podrás guardar en tu SQL,
-                adjuntar a un PDF o compartir.
-            </p>
-        </header>
+                <div class="zone-body">
+                  <div class="field-group form-grid">
+                    <div class="field-block">
+                      <label class="field-label" for="model-input">Modelo (opcional)</label>
+                      <input
+                        id="model-input"
+                        class="input"
+                        type="text"
+                        placeholder="gpt-5.1-thinking, claude-3.5, llama-3-70b..."
+                      />
+                    </div>
 
-        <div class="form-grid">
-            <label class="field">
-                <span class="field-label">
-                    Modelo <span class="field-optional">(opcional)</span>
-                </span>
-                <input id="model" class="input" placeholder="gpt-5.1-thinking, claude-3.7, llamafile, etc.">
-            </label>
+                    <div class="field-block">
+                      <label class="field-label" for="subject-id-input">Subject ID (opcional)</label>
+                      <input
+                        id="subject-id-input"
+                        class="input"
+                        type="text"
+                        placeholder="user-123, candidate-456..."
+                      />
+                    </div>
 
-            <label class="field">
-                <span class="field-label">
-                    Subject ID <span class="field-optional">(opcional)</span>
-                </span>
-                <input id="subject-id" class="input" placeholder="user-123, candidato-456, experimento-01…">
-            </label>
-        </div>
+                    <div class="field-block">
+                      <label class="field-label" for="prompt-input">
+                        Prompt maestro (texto exacto)
+                      </label>
+                      <textarea
+                        id="prompt-input"
+                        class="field-textarea mono"
+                      ></textarea>
+                    </div>
 
-        <label class="field">
-            <span class="field-label">Prompt maestro (texto exacto)</span>
-            <textarea
-                id="prompt-master"
-                class="textarea"
-                rows="6"
-                placeholder="Pega aquí el prompt exacto que enviaste a la IA, sin modificar ni una coma."></textarea>
-        </label>
+                    <div class="field-block">
+                      <label class="field-label" for="response-input">
+                        Respuesta completa de la IA
+                      </label>
+                      <textarea
+                        id="response-input"
+                        class="field-textarea mono"
+                      ></textarea>
+                    </div>
+                  </div>
 
-        <label class="field">
-            <span class="field-label">Respuesta completa de la IA</span>
-            <textarea
-                id="prompt-response"
-                class="textarea"
-                rows="10"
-                placeholder="Pega aquí toda la respuesta generada por la IA, sin recortar."></textarea>
-        </label>
+                  <div class="button-row">
+                    <button type="button" id="generate-btn" class="button-verified">
+                      Generar IA-HASH
+                    </button>
+                    <button type="button" id="clear-btn" class="button-secondary">
+                      Limpiar
+                    </button>
+                  </div>
 
-        <div class="actions">
-            <button id="btn-generate" class="btn btn-primary">Generar IA-HASH</button>
-            <button id="btn-clear-generate" class="btn btn-ghost">Limpiar</button>
-        </div>
-
-        <label class="field">
-            <span class="field-label">Documento IA-HASH (JSON firmado)</span>
-            <textarea
-                id="generated-json"
-                class="textarea textarea-code"
-                rows="12"
-                readonly
-                placeholder="Aquí aparecerá el JSON IA-HASH listo para guardar, firmar o adjuntar a tu flujo."></textarea>
-        </label>
-    </section>
-
-    <!-- HOW IT WORKS -->
-    <section id="docs" class="how card">
-        <header class="card-header">
-            <h2>How it works</h2>
-            <p class="card-subtitle">
-                Resumen rápido del protocolo mínimo IA-HASH v1:
-                normalizar → hashear → combinar → firmar → verificar.
-            </p>
-        </header>
-
-        <ol class="how-list">
-            <li>Normalizar prompt y respuesta (saltos de línea y espacios finales).</li>
-            <li>Hash de cada parte con SHA256 → <code>h_prompt</code> y <code>h_respuesta</code>.</li>
-            <li>Combinar versión, prompt, ids, hashes, modelo y timestamp en <code>h_total</code>.</li>
-            <li>Firmar <code>h_total</code> con Ed25519 → <code>firma_total</code>.</li>
-            <li>Verificar recalculando todo con la clave pública.</li>
-        </ol>
-
-        <p class="how-footnote">
-            Muy pronto: protocolo completo, API y ejemplos de integración listos para copiar.
-        </p>
-
-        <p class="how-meta">
-            IA-HASH · Prompt + Respuesta verificables · SHA256 + Ed25519 · Neutral, offline-first.  
-            Código abierto · Licencia Apache-2.0.
-        </p>
-    </section>
-
-</main>
-
-<footer class="footer">
-    <span>IA-HASH · 2025 · Neutral · Offline-first</span>
-    <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">Ver código en GitHub</a>
-</footer>
-
-<script src="/static/js/home.js"></script>
-</body>
-</html>
+                  <pre id="output-json" class="mono" aria-label="Documento IA-HASH generado">
+// El JSON IA-HASH aparecerá aquí
+                  </pre>
+                </div>
+              </div>
