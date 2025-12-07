@@ -7,8 +7,30 @@
 
   <div class="card">
     <h3>Prompt Maestro</h3>
-    <textarea class="input" id="prompt-text" readonly style="height: 220px;">{{ prompt.body }}</textarea>
+    <textarea class="input" id="prompt-text" readonly style="height: 220px;">{{ prompt.full_prompt }}</textarea>
+    <div class="muted" style="margin-top: 10px;">
+      <div><strong>Slug:</strong> {{ prompt.slug }}</div>
+      {% if prompt.h_public %}
+        <div><strong>h_public:</strong> {{ prompt.h_public }}</div>
+      {% endif %}
+    </div>
     <button class="button" style="margin-top: 10px;" onclick="copyPrompt()">Copiar Prompt</button>
+  </div>
+
+  <div class="card">
+    <h3>Generate IA-HASH</h3>
+    <textarea id="response-text" class="input" placeholder="Pega aquí la respuesta generada por la IA" style="height: 160px;"></textarea>
+
+    <div class="flex" style="margin-top: 10px; gap: 10px;">
+      <input id="pair-model" class="input" placeholder="Modelo (ej: gpt-4o)" value="unknown">
+      <label class="muted" style="align-self: center;">Prompt ID: {{ prompt.id }}</label>
+    </div>
+
+    <button class="button" style="margin-top: 10px;" onclick="generateIAHash({{ prompt.id }})">
+      Generate IA-HASH
+    </button>
+
+    <pre id="pair-log" class="muted" style="margin-top: 10px;"></pre>
   </div>
 
   <div class="card">

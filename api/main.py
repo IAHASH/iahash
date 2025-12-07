@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from iahash.db import (
@@ -27,6 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = BASE_DIR / "web"
 KEYS_DIR = Path("/data/keys")
 PUBLIC_KEY_PATH = KEYS_DIR / "issuer_ed25519.pub"
+templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
 
 class IssuePairRequest(BaseModel):
@@ -79,6 +82,69 @@ app.add_middleware(
 static_dir = WEB_DIR / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir), html=False), name="static")
+
+
+@app.get("/", response_class=HTMLResponse)
+def web_home(request: Request) -> Any:
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/verify", response_class=HTMLResponse)
+def web_verify(request: Request) -> Any:
+    return templates.TemplateResponse("verify.html", {"request": request})
+
+
+@app.get("/compare", response_class=HTMLResponse)
+def web_compare(request: Request) -> Any:
+    return templates.TemplateResponse("compare.html", {"request": request})
+
+
+@app.get("/docs", response_class=HTMLResponse)
+def web_docs(request: Request) -> Any:
+    return templates.TemplateResponse("docs.html", {"request": request})
+
+
+@app.get("/account", response_class=HTMLResponse)
+def web_account(request: Request) -> Any:
+    return templates.TemplateResponse("account.html", {"request": request})
+
+
+@app.get("/prompts", response_class=HTMLResponse)
+def web_prompts(request: Request) -> Any:
+    prompts = list_prompts()
+    return templates.TemplateResponse(
+        "prompts.html", {"request": request, "prompts": prompts}
+    )
+
+
+@app.get("/prompts/{slug}", response_class=HTMLResponse)
+def web_prompt_detail(slug: str, request: Request) -> Any:
+    prompt = get_prompt_by_slug(slug)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    prompt = {**prompt, "h_secret": None}
+    return templates.TemplateResponse(
+        "prompt_detail.html", {"request": request, "prompt": prompt}
+    )
+
+
+@app.get("/sequences", response_class=HTMLResponse)
+def web_sequences(request: Request) -> Any:
+    sequences = list_sequences()
+    return templates.TemplateResponse(
+        "sequences.html", {"request": request, "sequences": sequences}
+    )
+
+
+@app.get("/sequences/{slug}", response_class=HTMLResponse)
+def web_sequence_detail(slug: str, request: Request) -> Any:
+    sequence = get_sequence_by_slug(slug)
+    if not sequence:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    return templates.TemplateResponse(
+        "sequence_detail.html", {"request": request, "sequence": sequence}
+    )
 
 
 @app.get("/api")
@@ -175,6 +241,7 @@ def api_get_prompt(slug: str) -> Dict[str, Any]:
     prompt = get_prompt_by_slug(slug)
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
+    prompt = {**prompt, "h_secret": None}
     return {"prompt": prompt}
 
 
