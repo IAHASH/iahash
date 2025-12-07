@@ -1,11 +1,20 @@
+const TAB_KEYS = ["pair", "prompt-url", "checker"];
+
 function showTab(name) {
-  ["pair", "conversation", "checker"].forEach((id) => {
-    document.getElementById(`tab-${id}`).style.display =
-      id === name ? "block" : "none";
+  const target = TAB_KEYS.includes(name) ? name : "pair";
+  TAB_KEYS.forEach((id) => {
+    const el = document.getElementById(`tab-${id}`);
+    if (el) el.style.display = id === target ? "block" : "none";
   });
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.remove("active"));
-  const tabIndex = { pair: 0, conversation: 1, checker: 2 }[name];
-  document.querySelectorAll(".tab")[tabIndex].classList.add("active");
+  const tabIndex = TAB_KEYS.indexOf(target);
+  if (tabIndex >= 0) {
+    const tab = document.querySelectorAll(".tab")[tabIndex];
+    tab?.classList.add("active");
+  }
+  if (window.location.hash !== `#${target}`) {
+    history.replaceState(null, "", `#${target}`);
+  }
 }
 
 function renderResult(targetId, data, fallbackError) {
@@ -15,6 +24,35 @@ function renderResult(targetId, data, fallbackError) {
   } catch (err) {
     el.textContent = fallbackError || String(err);
   }
+}
+
+function setStatusBadge(statusText) {
+  const badge = document.getElementById("result-status");
+  if (!badge) return;
+  badge.textContent = statusText || "Pendiente";
+}
+
+function updateResultCard(data) {
+  if (!data) return;
+  const card = document.getElementById("result-card");
+  if (!card) return;
+
+  const iahId = data.iah_id || data.id || "—";
+  const status = data.status || data.state || data.validation?.status || "pendiente";
+
+  document.getElementById("result-iah-id").textContent = iahId;
+  document.getElementById("result-hash-prompt").textContent =
+    data.h_prompt || data.hash_prompt || "—";
+  document.getElementById("result-hash-response").textContent =
+    data.h_response || data.hash_response || "—";
+  document.getElementById("result-hash-total").textContent =
+    data.h_total || data.hash_total || data.h_iah || "—";
+  document.getElementById("result-signature").textContent =
+    data.signature || data.firma_total || "—";
+  setStatusBadge(status.toUpperCase());
+
+  renderResult("result-raw", data, "No se pudo serializar el resultado");
+  card.style.display = "grid";
 }
 
 async function submitPair() {
@@ -42,6 +80,7 @@ async function submitPair() {
     }
 
     renderResult("pair-log", data);
+    updateResultCard(data);
   } catch (err) {
     logEl.textContent = `Error de red: ${err}`;
   }
@@ -73,6 +112,7 @@ async function submitConversation() {
     }
 
     renderResult("conv-log", data);
+    updateResultCard(data);
   } catch (err) {
     logEl.textContent = `Error de red: ${err}`;
   }
@@ -105,7 +145,37 @@ async function submitChecker() {
     }
 
     renderResult("checker-log", data);
+    updateResultCard(data);
   } catch (err) {
     logEl.textContent = `Error de red: ${err}`;
   }
 }
+
+function syncTabWithHash() {
+  const hash = window.location.hash.replace("#", "");
+  if (TAB_KEYS.includes(hash)) {
+    showTab(hash);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("pair-form")?.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    submitPair();
+  });
+
+  document
+    .getElementById("conversation-form")
+    ?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      submitConversation();
+    });
+
+  document.getElementById("checker-form")?.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    submitChecker();
+  });
+
+  syncTabWithHash();
+  window.addEventListener("hashchange", syncTabWithHash);
+});
