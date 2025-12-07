@@ -56,12 +56,12 @@ class PairIssueRequest(BaseModel):
 
 
 class ConversationIssueRequest(BaseModel):
-    prompt_text: str
-    response_text: str
-    prompt_id: str
-    model: str
+    prompt_text: Optional[str] = None
+    response_text: Optional[str] = None
+    prompt_id: Optional[str] = None
+    model: str = "unknown"
     conversation_url: str
-    provider: str
+    provider: Optional[str] = None
     issuer_id: Optional[str] = None
     issuer_pk_url: Optional[str] = None
     subject_id: Optional[str] = None
@@ -95,11 +95,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static: /static → carpeta web/ (styles.css, logo.png, etc.)
+# Static: /static → carpeta web/static (styles.css, logo.png, JS, etc.)
 if WEB_DIR.exists():
     app.mount(
         "/static",
-        StaticFiles(directory=str(WEB_DIR), html=False),
+        StaticFiles(directory=str(WEB_DIR / "static"), html=False),
         name="static",
     )
 
@@ -193,17 +193,20 @@ def api_verify_pair(payload: PairIssueRequest) -> Dict[str, Any]:
     """
     Genera un documento IA-HASH para un par prompt + respuesta local.
     """
-    doc = issue_pair(
-        prompt_text=payload.prompt_text,
-        response_text=payload.response_text,
-        prompt_id=payload.prompt_id,
-        model=payload.model,
-        issuer_id=payload.issuer_id,
-        issuer_pk_url=payload.issuer_pk_url,
-        subject_id=payload.subject_id,
-        store_raw=payload.store_raw,
-    )
-    return doc
+    try:
+        doc = issue_pair(
+            prompt_text=payload.prompt_text,
+            response_text=payload.response_text,
+            prompt_id=payload.prompt_id,
+            model=payload.model,
+            issuer_id=payload.issuer_id,
+            issuer_pk_url=payload.issuer_pk_url,
+            subject_id=payload.subject_id,
+            store_raw=payload.store_raw,
+        )
+        return doc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/verify/conversation", response_class=JSONResponse)
@@ -224,27 +227,44 @@ def api_verify_conversation(payload: ConversationIssueRequest) -> Dict[str, Any]
             detail = "Unknown extraction error"
         raise HTTPException(status_code=400, detail=detail)
 
-    if (
-        extracted["prompt_text"] != payload.prompt_text
-        or extracted["response_text"] != payload.response_text
-    ):
-        raise HTTPException(
-            status_code=400, detail="Extracted conversation does not match payload"
-        )
+    prompt_text = extracted.get("prompt_text")
+    response_text = extracted.get("response_text")
 
-    doc = issue_conversation(
-        prompt_text=extracted["prompt_text"],
-        response_text=extracted["response_text"],
-        prompt_id=payload.prompt_id,
-        model=extracted.get("model") or payload.model,
-        conversation_url=payload.conversation_url,
-        provider=extracted.get("provider") or payload.provider,
-        issuer_id=payload.issuer_id,
-        issuer_pk_url=payload.issuer_pk_url,
-        subject_id=payload.subject_id,
-        store_raw=payload.store_raw,
-    )
-    return doc
+    if not prompt_text or not response_text:
+        raise HTTPException(status_code=400, detail="Conversation content unavailable")
+
+    if payload.prompt_text:
+        if extracted["prompt_text"] != payload.prompt_text:
+            raise HTTPException(
+                status_code=400,
+                detail="Extracted prompt does not match payload",
+            )
+        prompt_text = payload.prompt_text
+
+    if payload.response_text:
+        if extracted["response_text"] != payload.response_text:
+            raise HTTPException(
+                status_code=400,
+                detail="Extracted response does not match payload",
+            )
+        response_text = payload.response_text
+
+    try:
+        doc = issue_conversation(
+            prompt_text=prompt_text,
+            response_text=response_text,
+            prompt_id=payload.prompt_id,
+            model=extracted.get("model") or payload.model or "unknown",
+            conversation_url=payload.conversation_url,
+            provider=extracted.get("provider") or payload.provider or "unknown",
+            issuer_id=payload.issuer_id,
+            issuer_pk_url=payload.issuer_pk_url,
+            subject_id=payload.subject_id,
+            store_raw=payload.store_raw,
+        )
+        return doc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/check", response_class=JSONResponse)
