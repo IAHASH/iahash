@@ -37,7 +37,7 @@ def test_verifier_accepts_valid_document(monkeypatch, public_key_bytes):
     result = verify_document(doc, use_cache=True)
 
     assert result["valid"] is True
-    assert result["status"] == VerificationStatus.VALID
+    assert result["status"] == VerificationStatus.VERIFIED
     assert call_counter["count"] == 1
 
 
@@ -53,7 +53,7 @@ def test_verifier_handles_missing_issuer_pk_url(monkeypatch, public_key_bytes):
     result = verify_document(doc)
 
     assert result["valid"] is False
-    assert result["status"] == VerificationStatus.UNREACHABLE_SOURCE
+    assert result["status"] == VerificationStatus.MALFORMED_DOCUMENT
     assert "issuer_pk_url" in result["errors"][0]
 
 
@@ -73,7 +73,7 @@ def test_verifier_reports_invalid_url(monkeypatch, public_key_bytes):
     result = verify_document(doc)
 
     assert result["valid"] is False
-    assert result["status"] == VerificationStatus.UNREACHABLE_SOURCE
+    assert result["status"] == VerificationStatus.UNREACHABLE_ISSUER
     assert "bad url" in result["errors"][0]
 
 
@@ -93,7 +93,7 @@ def test_verifier_reports_timeout(monkeypatch, public_key_bytes):
     result = verify_document(doc, timeout=0.1)
 
     assert result["valid"] is False
-    assert result["status"] == VerificationStatus.UNREACHABLE_SOURCE
+    assert result["status"] == VerificationStatus.UNREACHABLE_ISSUER
     assert "Timeout" in result["errors"][0]
 
 
@@ -141,6 +141,7 @@ def test_hash_mismatch_reports_differences(monkeypatch, public_key_bytes):
 
     result = verify_document(tampered)
 
-    assert result["status"] == VerificationStatus.HASH_MISMATCH
+    assert result["status"] == VerificationStatus.INVALID_SIGNATURE
+    assert result["status_detail"] == "HASH_MISMATCH"
     assert result["differences"]["hashes"]["h_total"]["expected"] == "0" * 64
     assert result["differences"]["hashes"]["h_total"]["computed"] != "0" * 64

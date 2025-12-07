@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -19,6 +19,8 @@ from iahash.db import (
     list_prompts,
     list_sequences,
 )
+from iahash.config import ISSUER_PK_URL
+from iahash.crypto import get_issuer_public_key_pem
 from iahash.issuer import PROTOCOL_VERSION, issue_conversation, issue_pair
 from iahash.verifier import verify_document
 
@@ -28,8 +30,6 @@ API_DESCRIPTION = "IA-HASH verification service"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = BASE_DIR / "web"
-KEYS_DIR = Path("/data/keys")
-PUBLIC_KEY_PATH = KEYS_DIR / "issuer_ed25519.pub"
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
 
@@ -193,6 +193,7 @@ def api_info() -> Dict[str, Any]:
             "sequence": "/api/sequences/{slug}",
             "iah_document": "/api/iah/{iah_id}",
             "public_key": "/public-key",
+            "issuer_public_key_file": "/keys/issuer_ed25519.pub",
             "health": "/health",
         },
     }
@@ -203,16 +204,24 @@ def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/keys/issuer_ed25519.pub", response_class=PlainTextResponse)
+def serve_issuer_public_key() -> str:
+    try:
+        pem_bytes = get_issuer_public_key_pem()
+    except FileNotFoundError as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=404, detail="Public key not found") from exc
+
+    return pem_bytes.decode("utf-8")
+
+
 @app.get("/public-key")
 def get_public_key() -> Dict[str, str]:
-    if not PUBLIC_KEY_PATH.exists():
-        raise HTTPException(status_code=404, detail="Public key not found")
-
-    pem_text = PUBLIC_KEY_PATH.read_text(encoding="utf-8")
-    key_hex = PUBLIC_KEY_PATH.read_bytes().hex()
+    pem_bytes = get_issuer_public_key_pem()
+    pem_text = pem_bytes.decode("utf-8")
+    key_hex = pem_bytes.hex()
 
     return {
-        "issuer_pk_url": "/keys/issuer_ed25519.pub",
+        "issuer_pk_url": ISSUER_PK_URL,
         "pem": pem_text,
         "hex": key_hex,
     }

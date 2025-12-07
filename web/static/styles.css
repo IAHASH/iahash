@@ -322,6 +322,28 @@ p {
   width: fit-content;
 }
 
+.badge--ok {
+  border-color: rgba(34, 197, 94, 0.8);
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+}
+
+.badge--warn {
+  border-color: rgba(250, 204, 21, 0.8);
+  background: rgba(250, 204, 21, 0.12);
+  color: #fef9c3;
+}
+
+.badge--error {
+  border-color: rgba(248, 113, 113, 0.8);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecdd3;
+}
+
+.badge--pending {
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -437,6 +459,12 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.result-head-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .result-grid {

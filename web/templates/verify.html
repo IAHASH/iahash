@@ -36,8 +36,9 @@
             <span class="field-label">Modelo</span>
             <select id="pair-model" class="input">
               <option value="unknown" selected>unknown</option>
+              <option value="gpt-4.1">gpt-4.1</option>
               <option value="gpt-4o">gpt-4o</option>
-              <option value="claude-3-opus">claude-3-opus</option>
+              <option value="claude-3.5">claude-3.5</option>
             </select>
           </label>
           <div class="field-block">
@@ -76,7 +77,12 @@
         <div class="field-row">
           <label class="field-block">
             <span class="field-label">Modelo</span>
-            <input id="conv-model" class="input" placeholder="unknown" value="unknown" />
+            <select id="conv-model" class="input">
+              <option value="unknown" selected>unknown</option>
+              <option value="gpt-4.1">gpt-4.1</option>
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="claude-3.5">claude-3.5</option>
+            </select>
           </label>
           <label class="field-block">
             <span class="field-label">Proveedor</span>
@@ -126,7 +132,10 @@
         <p class="muted">Resultado IA-HASH</p>
         <h3 id="result-iah-id">—</h3>
       </div>
-      <span class="badge" id="result-status">Pendiente</span>
+      <div class="result-head-actions">
+        <button type="button" class="button-secondary" id="copy-json-btn">Copiar JSON</button>
+        <span class="badge" id="result-status">Pendiente</span>
+      </div>
     </div>
     <div class="result-grid">
       <div>
@@ -144,6 +153,18 @@
       <div>
         <p class="muted label">Firma</p>
         <p id="result-signature" class="mono">—</p>
+      </div>
+      <div>
+        <p class="muted label">Modelo</p>
+        <p id="result-model" class="mono">—</p>
+      </div>
+      <div>
+        <p class="muted label">Issuer ID</p>
+        <p id="result-issuer" class="mono">—</p>
+      </div>
+      <div>
+        <p class="muted label">issuer_pk_url</p>
+        <p id="result-issuer-url" class="mono">—</p>
       </div>
     </div>
     <details class="result-details">

@@ -229,6 +229,29 @@ def load_ed25519_public_key(path: Optional[Path] = None) -> ed25519.Ed25519Publi
     return serialization.load_pem_public_key(data)
 
 
+def get_issuer_public_key_pem() -> bytes:
+    """Obtiene la clave pública del emisor en formato PEM.
+
+    Si el fichero de clave pública existe, se devuelve tal cual. Si solo está
+    presente la clave privada, se deriva la pública, se guarda y se devuelve
+    en memoria.
+    """
+
+    public_key_path = get_default_public_key_path()
+    if public_key_path.exists():
+        return public_key_path.read_bytes()
+
+    private_key = load_ed25519_private_key()
+    derived_public = private_key.public_key()
+    pem = derived_public.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    save_ed25519_public_key(derived_public, public_key_path)
+    return pem
+
+
 # ============================================================================
 # Firmas (nivel bajo y nivel protocolo)
 # ============================================================================

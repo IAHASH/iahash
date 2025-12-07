@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import hmac
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -19,14 +20,12 @@ from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
 _PUBLIC_KEY_CACHE: Dict[str, Ed25519PublicKey] = {}
 
 
-class VerificationStatus:
-    VALID = "VALID"
+class VerificationStatus(str, Enum):
+    VERIFIED = "VERIFIED"
     INVALID_SIGNATURE = "INVALID_SIGNATURE"
-    HASH_MISMATCH = "HASH_MISMATCH"
-    PROMPT_MISMATCH = "PROMPT_MISMATCH"
-    UNREACHABLE_SOURCE = "UNREACHABLE_SOURCE"
+    UNREACHABLE_ISSUER = "UNREACHABLE_ISSUER"
+    MALFORMED_DOCUMENT = "MALFORMED_DOCUMENT"
     UNSUPPORTED_PROVIDER = "UNSUPPORTED_PROVIDER"
-    UNKNOWN = "UNKNOWN"
 
 
 SUPPORTED_PROVIDERS = {"chatgpt"}
@@ -88,13 +87,15 @@ def verify_document(
       5. Devolver estado + flags de validez y lista de errores.
     """
     errors: List[str] = []
-    status = VerificationStatus.UNKNOWN
+    status = VerificationStatus.MALFORMED_DOCUMENT
     differences: Optional[Dict[str, Any]] = None
+    status_detail: Optional[str] = None
 
-    def _fail(status_value: str, error_message: str) -> Dict[str, Any]:
+    def _fail(status_value: VerificationStatus, error_message: str) -> Dict[str, Any]:
         return {
             "valid": False,
-            "status": status_value,
+            "status": status_value.value,
+            "status_detail": status_detail,
             "signature_valid": False,
             "hash_valid": False,
             "prompt_match": False,
@@ -104,7 +105,8 @@ def verify_document(
 
     issuer_pk_url = document.get("issuer_pk_url")
     if not issuer_pk_url:
-        status = VerificationStatus.UNREACHABLE_SOURCE
+        status = VerificationStatus.MALFORMED_DOCUMENT
+        status_detail = "MISSING_ISSUER_PK_URL"
         return _fail(status, "issuer_pk_url is required")
 
     # 1) Cargar clave pública
@@ -113,10 +115,10 @@ def verify_document(
             issuer_pk_url, timeout=timeout, use_cache=use_cache, key_cache=key_cache
         )
     except (ValueError, TimeoutError, ConnectionError) as exc:
-        status = VerificationStatus.UNREACHABLE_SOURCE
+        status = VerificationStatus.UNREACHABLE_ISSUER
         return _fail(status, str(exc))
     except Exception as exc:  # pragma: no cover - fallback para errores inesperados
-        status = VerificationStatus.UNREACHABLE_SOURCE
+        status = VerificationStatus.UNREACHABLE_ISSUER
         return _fail(status, f"Unable to fetch public key: {exc}")
 
     # 2) Resolver textos del prompt/respuesta
@@ -134,13 +136,13 @@ def verify_document(
         try:
             extracted = extract_chatgpt_share(conversation_url)
         except UnreachableSource as exc:
-            status = VerificationStatus.UNREACHABLE_SOURCE
+            status = VerificationStatus.UNREACHABLE_ISSUER
             return _fail(status, f"Conversation URL unreachable: {exc}")
         except UnsupportedProvider as exc:
             status = VerificationStatus.UNSUPPORTED_PROVIDER
             return _fail(status, str(exc))
         except Exception as exc:  # pragma: no cover - extractor defensivo
-            status = VerificationStatus.UNREACHABLE_SOURCE
+            status = VerificationStatus.UNREACHABLE_ISSUER
             return _fail(status, f"Unable to fetch conversation: {exc}")
 
         fetched_prompt = extracted.get("prompt_text")
@@ -225,15 +227,15 @@ def verify_document(
 
     # 7) Determinar estado final
     if signature_valid and hash_valid and prompt_match and prompt_hmac_valid:
-        status = VerificationStatus.VALID
-    elif not signature_valid:
-        status = VerificationStatus.INVALID_SIGNATURE
+        status = VerificationStatus.VERIFIED
     elif not prompt_match or not prompt_hmac_valid:
-        status = VerificationStatus.PROMPT_MISMATCH
-    elif not hash_valid:
-        status = VerificationStatus.HASH_MISMATCH
+        status = VerificationStatus.INVALID_SIGNATURE
+        status_detail = "CONTENT_MISMATCH"
+    elif not signature_valid or not hash_valid:
+        status = VerificationStatus.INVALID_SIGNATURE
+        status_detail = "SIGNATURE_MISMATCH" if not signature_valid else "HASH_MISMATCH"
 
-    if status in {VerificationStatus.HASH_MISMATCH, VerificationStatus.PROMPT_MISMATCH}:
+    if status == VerificationStatus.INVALID_SIGNATURE:
         differences = {"hashes": {}, "fields": {}}  # type: ignore[assignment]
 
         def add_diff(category: str, key: str, expected: Any, computed: Any) -> None:
@@ -273,8 +275,9 @@ def verify_document(
         }
 
     return {
-        "valid": status == VerificationStatus.VALID,
-        "status": status,
+        "valid": status == VerificationStatus.VERIFIED,
+        "status": status.value,
+        "status_detail": status_detail,
         "signature_valid": signature_valid,
         "hash_valid": hash_valid,
         "prompt_match": prompt_match,

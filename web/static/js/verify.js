@@ -26,10 +26,22 @@ function renderResult(targetId, data, fallbackError) {
   }
 }
 
+const STATUS_UI = {
+  VERIFIED: { label: "VERIFICADO", className: "badge--ok" },
+  INVALID_SIGNATURE: { label: "FIRMA INVÁLIDA", className: "badge--error" },
+  UNREACHABLE_ISSUER: { label: "FUENTE NO VERIFICABLE", className: "badge--warn" },
+  MALFORMED_DOCUMENT: { label: "DOCUMENTO IA-HASH INVÁLIDO", className: "badge--error" },
+  UNSUPPORTED_PROVIDER: { label: "FUENTE NO VERIFICABLE", className: "badge--warn" },
+};
+
 function setStatusBadge(statusText) {
   const badge = document.getElementById("result-status");
   if (!badge) return;
-  badge.textContent = statusText || "Pendiente";
+
+  const normalized = statusText?.toUpperCase?.() || "PENDING";
+  const meta = STATUS_UI[normalized] || { label: normalized, className: "badge--pending" };
+  badge.textContent = meta.label;
+  badge.className = `badge ${meta.className}`;
 }
 
 function updateResultCard(data) {
@@ -41,7 +53,7 @@ function updateResultCard(data) {
   const verification = data.verification || {};
   const iahId = documentData.iah_id || documentData.id || "—";
   const status =
-    verification.status || documentData.status || documentData.state || documentData.validation?.status || "pendiente";
+    verification.status || documentData.status || documentData.state || documentData.validation?.status || "PENDING";
 
   document.getElementById("result-iah-id").textContent = iahId;
   document.getElementById("result-hash-prompt").textContent =
@@ -52,6 +64,9 @@ function updateResultCard(data) {
     documentData.h_total || documentData.hash_total || documentData.h_iah || "—";
   document.getElementById("result-signature").textContent =
     documentData.signature || documentData.firma_total || "—";
+  document.getElementById("result-model").textContent = documentData.model || "unknown";
+  document.getElementById("result-issuer").textContent = documentData.issuer_id || "—";
+  document.getElementById("result-issuer-url").textContent = documentData.issuer_pk_url || "—";
   setStatusBadge(status.toUpperCase());
 
   renderResult("result-raw", data, "No se pudo serializar el resultado");
@@ -195,6 +210,26 @@ function syncTabWithHash() {
   }
 }
 
+function copyResultJson() {
+  const rawEl = document.getElementById("result-raw");
+  const btn = document.getElementById("copy-json-btn");
+  const text = rawEl?.textContent || "";
+  if (!text.trim() || text.includes("(sin datos)")) return;
+
+  navigator.clipboard
+    ?.writeText(text)
+    .then(() => {
+      if (btn) {
+        const original = btn.textContent;
+        btn.textContent = "Copiado";
+        setTimeout(() => {
+          btn.textContent = original;
+        }, 1500);
+      }
+    })
+    .catch(() => {});
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("pair-form")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
@@ -212,6 +247,8 @@ document.addEventListener("DOMContentLoaded", () => {
     ev.preventDefault();
     submitChecker();
   });
+
+  document.getElementById("copy-json-btn")?.addEventListener("click", copyResultJson);
 
   syncTabWithHash();
   window.addEventListener("hashchange", syncTabWithHash);
