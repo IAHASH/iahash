@@ -235,9 +235,95 @@ function renderIssuedDocument(container, response) {
   });
 }
 
+function renderShareVerification(container, payload) {
+  if (!container) return;
+  if (!payload || payload.success !== true) {
+    const message = payload?.error || payload?.reason || "Verificación fallida";
+    return renderError(container, { message });
+  }
+
+  clearIAHASHContainer(container);
+  container.classList.add("result-card", "verify-result");
+
+  const provider = payload.provider || "chatgpt";
+  const model = payload.model || "unknown";
+  const conversationUrl = payload.conversation_url || payload.url;
+
+  container.innerHTML = `
+    <div class="result-card__head">
+      <div>
+        <p class="muted">Verificación de conversación</p>
+        <h3 class="iah-id">ChatGPT share</h3>
+      </div>
+      <div class="result-head-actions">
+        <span class="badge badge--ok" data-role="status">OK</span>
+      </div>
+    </div>
+    <div class="result-summary">
+      <div>
+        <p class="muted label">Proveedor</p>
+        <p class="mono" data-field="provider">${provider}</p>
+      </div>
+      <div>
+        <p class="muted label">Modelo</p>
+        <p class="mono" data-field="model">${model}</p>
+      </div>
+      <div>
+        <p class="muted label">Conversation URL</p>
+        <p class="mono" data-field="conversation-url">${conversationUrl || "—"}</p>
+      </div>
+    </div>
+    <div class="result-meta-grid">
+      <div class="result-normalized" data-field="normalized" style="display:grid;">
+        <h4>Prompt extraído</h4>
+        <pre class="result-raw" data-field="prompt-block"></pre>
+        <h4>Respuesta extraída</h4>
+        <pre class="result-raw" data-field="response-block"></pre>
+      </div>
+    </div>
+    <details class="result-details">
+      <summary>Ver JSON completo</summary>
+      <pre class="result-raw muted" data-field="raw">(sin datos)</pre>
+    </details>
+  `;
+
+  const promptBlock = container.querySelector("[data-field='prompt-block']");
+  if (promptBlock) {
+    promptBlock.textContent = payload.extracted_prompt || "(sin prompt)";
+  }
+
+  const responseBlock = container.querySelector("[data-field='response-block']");
+  if (responseBlock) {
+    responseBlock.textContent = payload.extracted_answer || "(sin respuesta)";
+  }
+
+  const convEl = container.querySelector("[data-field='conversation-url']");
+  if (convEl && conversationUrl) {
+    convEl.textContent = "";
+    const link = document.createElement("a");
+    link.href = conversationUrl;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = conversationUrl;
+    convEl.appendChild(link);
+  }
+
+  const rawEl = container.querySelector("[data-field='raw']");
+  if (rawEl) {
+    try {
+      rawEl.textContent = JSON.stringify(payload, null, 2);
+    } catch (err) {
+      rawEl.textContent = String(err);
+    }
+  }
+
+  container.style.display = "grid";
+}
+
 window.renderIssuedDocument = renderIssuedDocument;
 window.renderError = renderError;
 window.renderLoading = renderLoading;
 window.renderIAHASHResult = renderIssuedDocument;
 window.renderIAHASHError = renderError;
+window.renderShareVerification = renderShareVerification;
 window.clearIAHASHContainer = clearIAHASHContainer;

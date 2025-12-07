@@ -41,7 +41,7 @@ function logResult(targetId, data, fallbackError) {
 }
 
 function isValidChatGPTShare(url) {
-  return /^https:\/\/chatgpt\.com\/share\/[0-9a-fA-F\-]+$/.test(url);
+  return /^https:\/\/(chatgpt\.com|chat\.openai\.com)\/share\/[0-9a-fA-F\-]+$/.test(url);
 }
 
 async function submitPair() {
@@ -86,12 +86,7 @@ async function submitPair() {
 }
 
 async function submitConversation() {
-  const payload = {
-    prompt_id: document.getElementById("prompt-slug").value || null,
-    provider: document.getElementById("conv-provider")?.value || "chatgpt",
-    share_url: document.getElementById("conv-url").value,
-    model: document.getElementById("conv-model")?.value || "chatgpt",
-  };
+  const shareUrl = document.getElementById("conv-url").value;
 
   const logEl = document.getElementById("conv-log");
   const button = document.getElementById("conv-submit");
@@ -100,7 +95,7 @@ async function submitConversation() {
   renderLoading(resultContainer, "Verificando URL y generando IA-HASH…");
   logEl.textContent = "Enviando…";
 
-  if (!isValidChatGPTShare(payload.share_url || "")) {
+  if (!isValidChatGPTShare(shareUrl || "")) {
     const detail = "URL inválida. Usa un enlace de chatgpt.com/share.";
     renderError(resultContainer, { message: detail });
     logEl.textContent = detail;
@@ -110,23 +105,22 @@ async function submitConversation() {
   setLoading(button, true, "Generando…", "Generar IA-HASH");
 
   try {
-    const res = await fetch("/api/issue/from_prompt_url", {
+    const res = await fetch("/api/verify/share", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ share_url: shareUrl }),
     });
 
     const data = await res.json();
-    if (!res.ok || data?.status !== "ISSUED") {
-      const detail =
-        data?.error?.message || data?.detail || "Error verificando conversación";
+    if (!res.ok || data?.success !== true) {
+      const detail = data?.error || data?.detail || data?.reason || "Error verificando conversación";
       logEl.textContent = detail;
       renderError(resultContainer, data);
       return;
     }
 
     logResult("conv-log", data);
-    renderIssuedDocument(resultContainer, data);
+    renderShareVerification(resultContainer, data);
   } catch (err) {
     const msg = `Error de red: ${err}`;
     logEl.textContent = msg;

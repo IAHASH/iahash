@@ -87,9 +87,15 @@ class IssueFromPromptUrlPayload(BaseModel):
     subject_id: str | None = None
 
 
+class VerifySharePayload(BaseModel):
+    share_url: str
+
+
 logger = logging.getLogger(__name__)
 
-CHATGPT_SHARE_PATTERN = re.compile(r"^https://chatgpt\.com/share/[0-9a-fA-F\-]+$")
+CHATGPT_SHARE_PATTERN = re.compile(
+    r"^https://(chatgpt\.com|chat\.openai\.com)/share/[0-9a-fA-F\-]+$"
+)
 
 
 def _issue_response(document: Dict[str, Any]) -> Dict[str, Any]:
@@ -107,6 +113,28 @@ def _error_response(
             "status": "ERROR",
             "document": None,
             "error": {"code": code, "message": message},
+        },
+    )
+
+
+def _share_error_response(
+    reason: str,
+    message: str,
+    *,
+    status_code: int = 400,
+    conversation_url: str | None = None,
+):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": False,
+            "reason": reason,
+            "error": message,
+            "extracted_prompt": None,
+            "extracted_answer": None,
+            "provider": None,
+            "model": None,
+            "conversation_url": conversation_url,
         },
     )
 
@@ -260,6 +288,7 @@ def api_info() -> Dict[str, Any]:
         "standard": PROTOCOL_VERSION,
         "endpoints": {
             "pair_issue": "/api/verify/pair",
+            "share_verify": "/api/verify/share",
             "conversation_issue": "/api/verify/conversation",
             "issue_from_prompt_url": "/api/issue/from_prompt_url",
             "issue_from_prompt_url_deprecated": "/api/verify/prompt_url",
@@ -320,6 +349,55 @@ def api_verify_pair(payload: IssuePairRequest) -> Dict[str, Any]:
         return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/verify/share")
+def api_verify_share(payload: VerifySharePayload) -> Dict[str, Any]:
+    share_url = (payload.share_url or "").strip()
+    if not CHATGPT_SHARE_PATTERN.match(share_url):
+        return _share_error_response(
+            "INVALID_URL",
+            "URL inválida. Debe ser un enlace https://chatgpt.com/share/... o https://chat.openai.com/share/...",
+        )
+
+    try:
+        extracted = extract_chatgpt_share(share_url)
+    except UnsupportedProvider:
+        return _share_error_response(
+            "PARSING_FAILED", "Unsupported or unreadable ChatGPT share page"
+        )
+    except UnreachableSource:
+        return _share_error_response("FETCH_FAILED", "Cannot fetch ChatGPT share URL")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Unexpected error verifying share URL", exc_info=exc)
+        return _share_error_response(
+            "INTERNAL_ERROR",
+            "Unexpected error verifying share URL",
+            status_code=500,
+        )
+
+    prompt_text = extracted.get("prompt_text") if extracted else None
+    response_text = extracted.get("response_text") if extracted else None
+
+    if not prompt_text or not response_text:
+        return _share_error_response(
+            "PARSING_FAILED",
+            "No se pudo extraer prompt o respuesta desde la conversación compartida",
+        )
+
+    provider = extracted.get("provider") or "chatgpt"
+    model_value = extracted.get("model") or "unknown"
+
+    return {
+        "success": True,
+        "reason": None,
+        "error": None,
+        "extracted_prompt": prompt_text,
+        "extracted_answer": response_text,
+        "provider": provider,
+        "model": model_value,
+        "conversation_url": share_url,
+    }
 
 
 @app.post("/api/verify/conversation")
