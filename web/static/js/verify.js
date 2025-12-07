@@ -37,21 +37,58 @@ function updateResultCard(data) {
   const card = document.getElementById("result-card");
   if (!card) return;
 
-  const iahId = data.iah_id || data.id || "—";
-  const status = data.status || data.state || data.validation?.status || "pendiente";
+  const documentData = data.document || data;
+  const verification = data.verification || {};
+  const iahId = documentData.iah_id || documentData.id || "—";
+  const status =
+    verification.status || documentData.status || documentData.state || documentData.validation?.status || "pendiente";
 
   document.getElementById("result-iah-id").textContent = iahId;
   document.getElementById("result-hash-prompt").textContent =
-    data.h_prompt || data.hash_prompt || "—";
+    documentData.h_prompt || documentData.hash_prompt || "—";
   document.getElementById("result-hash-response").textContent =
-    data.h_response || data.hash_response || "—";
+    documentData.h_response || documentData.hash_response || "—";
   document.getElementById("result-hash-total").textContent =
-    data.h_total || data.hash_total || data.h_iah || "—";
+    documentData.h_total || documentData.hash_total || documentData.h_iah || "—";
   document.getElementById("result-signature").textContent =
-    data.signature || data.firma_total || "—";
+    documentData.signature || documentData.firma_total || "—";
   setStatusBadge(status.toUpperCase());
 
   renderResult("result-raw", data, "No se pudo serializar el resultado");
+  const errors = verification.errors || data.errors || [];
+  const errorList = document.getElementById("error-list");
+  const errorBox = document.getElementById("result-errors");
+  if (errorList && errorBox) {
+    errorList.innerHTML = "";
+    if (errors.length > 0) {
+      errors.forEach((err) => {
+        const li = document.createElement("li");
+        li.textContent = err;
+        errorList.appendChild(li);
+      });
+      errorBox.style.display = "block";
+    } else {
+      errorBox.style.display = "none";
+    }
+  }
+
+  const normalizedBox = document.getElementById("normalized-container");
+  if (normalizedBox) {
+    const normalizedPrompt = verification.normalized_prompt_text;
+    const normalizedResponse = verification.normalized_response_text;
+    const shouldShow = documentData.store_raw && (normalizedPrompt || normalizedResponse);
+
+    if (shouldShow) {
+      document.getElementById("normalized-prompt").textContent =
+        normalizedPrompt || "(sin prompt normalizado)";
+      document.getElementById("normalized-response").textContent =
+        normalizedResponse || "(sin respuesta normalizada)";
+      normalizedBox.style.display = "grid";
+    } else {
+      normalizedBox.style.display = "none";
+    }
+  }
+
   card.style.display = "grid";
 }
 
