@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import hmac
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -10,6 +12,12 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from iahash.crypto import normalize_text, sha256_hex, verify_signature
 from iahash.issuer import PROTOCOL_VERSION, build_total_hash_string
+from iahash.extractors.chatgpt_share import (
+    ERROR_PARSING,
+    ERROR_UNREACHABLE,
+    ERROR_UNSUPPORTED,
+    extract_chatgpt_share,
+)
 
 
 _PUBLIC_KEY_CACHE: Dict[str, Ed25519PublicKey] = {}
@@ -21,7 +29,11 @@ class VerificationStatus:
     HASH_MISMATCH = "HASH_MISMATCH"
     PROMPT_MISMATCH = "PROMPT_MISMATCH"
     UNREACHABLE_SOURCE = "UNREACHABLE_SOURCE"
+    UNSUPPORTED_PROVIDER = "UNSUPPORTED_PROVIDER"
     UNKNOWN = "UNKNOWN"
+
+
+SUPPORTED_PROVIDERS = {"chatgpt"}
 
 
 def load_remote_public_key(
@@ -82,17 +94,21 @@ def verify_document(
     errors: List[str] = []
     status = VerificationStatus.UNKNOWN
 
-    issuer_pk_url = document.get("issuer_pk_url")
-    if not issuer_pk_url:
-        status = VerificationStatus.UNREACHABLE_SOURCE
+    def _fail(status_value: str, error_message: str) -> Dict[str, Any]:
         return {
             "valid": False,
-            "status": status,
+            "status": status_value,
             "signature_valid": False,
             "hash_valid": False,
             "prompt_match": False,
-            "errors": ["issuer_pk_url is required"],
+            "prompt_hmac_valid": False,
+            "errors": [error_message],
         }
+
+    issuer_pk_url = document.get("issuer_pk_url")
+    if not issuer_pk_url:
+        status = VerificationStatus.UNREACHABLE_SOURCE
+        return _fail(status, "issuer_pk_url is required")
 
     # 1) Cargar clave pública
     try:
@@ -101,26 +117,56 @@ def verify_document(
         )
     except (ValueError, TimeoutError, ConnectionError) as exc:
         status = VerificationStatus.UNREACHABLE_SOURCE
-        return {
-            "valid": False,
-            "status": status,
-            "signature_valid": False,
-            "hash_valid": False,
-            "prompt_match": False,
-            "errors": [str(exc)],
-        }
-    except Exception as exc:  # pragma: no cover - fallback for unexpected errors
+        return _fail(status, str(exc))
+    except Exception as exc:  # pragma: no cover - fallback para errores inesperados
         status = VerificationStatus.UNREACHABLE_SOURCE
-        return {
-            "valid": False,
-            "status": status,
-            "signature_valid": False,
-            "hash_valid": False,
-            "prompt_match": False,
-            "errors": [f"Unable to fetch public key: {exc}"],
-        }
+        return _fail(status, f"Unable to fetch public key: {exc}")
 
-    # 2) Verificar firma
+    # 2) Resolver textos del prompt/respuesta
+    provider = (document.get("provider") or "").lower()
+    conversation_url = document.get("conversation_url")
+    fetched_prompt: Optional[str] = None
+    fetched_response: Optional[str] = None
+    fetched_model: Optional[str] = None
+
+    if conversation_url and provider:
+        if provider not in SUPPORTED_PROVIDERS:
+            status = VerificationStatus.UNSUPPORTED_PROVIDER
+            return _fail(status, f"Provider not supported: {provider}")
+
+        try:
+            extracted = extract_chatgpt_share(conversation_url)
+        except Exception as exc:  # pragma: no cover - extractor defensivo
+            status = VerificationStatus.UNREACHABLE_SOURCE
+            return _fail(status, f"Unable to fetch conversation: {exc}")
+
+        if extracted.get("error"):
+            detail = extracted["error"]
+            if detail == ERROR_UNREACHABLE:
+                status = VerificationStatus.UNREACHABLE_SOURCE
+                return _fail(status, "Conversation URL unreachable")
+            if detail == ERROR_UNSUPPORTED:
+                status = VerificationStatus.UNSUPPORTED_PROVIDER
+                return _fail(status, "Unsupported conversation format")
+            if detail == ERROR_PARSING:
+                status = VerificationStatus.PROMPT_MISMATCH
+                return _fail(status, "Conversation content could not be parsed")
+            status = VerificationStatus.UNREACHABLE_SOURCE
+            return _fail(status, str(detail))
+
+        fetched_prompt = extracted.get("prompt_text")
+        fetched_response = extracted.get("response_text")
+        fetched_model = extracted.get("model")
+
+    raw_prompt = fetched_prompt if fetched_prompt is not None else document.get("raw_prompt_text")
+    raw_response = (
+        fetched_response if fetched_response is not None else document.get("raw_response_text")
+    )
+
+    h_prompt_expected = document.get("h_prompt")
+    h_response_expected = document.get("h_response")
+
+    # 3) Verificar firma sobre h_total provisto
     signature_hex = document.get("signature", "")
     try:
         signature_bytes = bytes.fromhex(signature_hex)
@@ -128,40 +174,40 @@ def verify_document(
         signature_bytes = b""
 
     signature_valid = verify_signature(
-        document["h_total"].encode("utf-8"), signature_bytes, public_key
+        document.get("h_total", "").encode("utf-8"), signature_bytes, public_key
     )
     if not signature_valid:
-        status = VerificationStatus.INVALID_SIGNATURE
         errors.append("Signature verification failed")
 
-    # 3) Recalcular hashes de prompt/respuesta si tenemos raw text
-    h_prompt_expected = document.get("h_prompt")
-    h_response_expected = document.get("h_response")
-
+    # 4) Recalcular hashes de prompt/respuesta si tenemos raw text
     prompt_match = True
+    recomputed_prompt_hash: Optional[str] = None
+    recomputed_response_hash: Optional[str] = None
 
-    raw_prompt = document.get("raw_prompt_text")
     if raw_prompt is not None:
-        recomputed_prompt = sha256_hex(normalize_text(raw_prompt).encode("utf-8"))
-        if recomputed_prompt != h_prompt_expected:
+        recomputed_prompt_hash = sha256_hex(normalize_text(raw_prompt).encode("utf-8"))
+        if recomputed_prompt_hash != h_prompt_expected:
             prompt_match = False
             errors.append("Prompt hash mismatch")
 
-    raw_response = document.get("raw_response_text")
     if raw_response is not None:
-        recomputed_response = sha256_hex(normalize_text(raw_response).encode("utf-8"))
-        if recomputed_response != h_response_expected:
+        recomputed_response_hash = sha256_hex(normalize_text(raw_response).encode("utf-8"))
+        if recomputed_response_hash != h_response_expected:
             prompt_match = False
             errors.append("Response hash mismatch")
 
-    # 4) Recalcular h_total a partir de h_prompt/h_response/model/timestamp
+    # 5) Recalcular h_total a partir de h_prompt/h_response/model/timestamp
+    final_h_prompt = recomputed_prompt_hash or h_prompt_expected or ""
+    final_h_response = recomputed_response_hash or h_response_expected or ""
+    model_value = fetched_model or document.get("model", "unknown")
+
     h_total_recomputed = sha256_hex(
         build_total_hash_string(
             document.get("protocol_version", PROTOCOL_VERSION),
             document.get("prompt_id"),
-            h_prompt_expected,
-            h_response_expected,
-            document.get("model", "unknown"),
+            final_h_prompt,
+            final_h_response,
+            model_value,
             document.get("timestamp", ""),
         ).encode("utf-8")
     )
@@ -169,15 +215,29 @@ def verify_document(
     if not hash_valid:
         errors.append("h_total mismatch")
 
-    # 5) Determinar estado final
-    if signature_valid and hash_valid and prompt_match:
+    # 6) Verificación opcional de HMAC del prompt maestro
+    prompt_hmac_valid = True
+    prompt_hmac = document.get("prompt_hmac")
+    prompt_hmac_key = os.getenv("IAHASH_PROMPT_HMAC_KEY")
+    if prompt_hmac and prompt_hmac_key and raw_prompt is not None:
+        computed_hmac = hmac.new(
+            prompt_hmac_key.encode("utf-8"),
+            normalize_text(raw_prompt).encode("utf-8"),
+            "sha256",
+        ).hexdigest()
+        prompt_hmac_valid = computed_hmac == prompt_hmac
+        if not prompt_hmac_valid:
+            errors.append("Prompt HMAC mismatch")
+
+    # 7) Determinar estado final
+    if signature_valid and hash_valid and prompt_match and prompt_hmac_valid:
         status = VerificationStatus.VALID
     elif not signature_valid:
         status = VerificationStatus.INVALID_SIGNATURE
+    elif not prompt_match or not prompt_hmac_valid:
+        status = VerificationStatus.PROMPT_MISMATCH
     elif not hash_valid:
         status = VerificationStatus.HASH_MISMATCH
-    elif not prompt_match:
-        status = VerificationStatus.PROMPT_MISMATCH
 
     return {
         "valid": status == VerificationStatus.VALID,
@@ -185,5 +245,6 @@ def verify_document(
         "signature_valid": signature_valid,
         "hash_valid": hash_valid,
         "prompt_match": prompt_match,
+        "prompt_hmac_valid": prompt_hmac_valid,
         "errors": errors,
     }
