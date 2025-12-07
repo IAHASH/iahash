@@ -6,12 +6,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
+from iahash.chatgpt import ChatGPTShareError, fetch_chatgpt_share
 from iahash.issuer import issue_document
-from iahash.verifier import verify_document
 from iahash.models import IAHashDocument
 from iahash.paths import public_key_path
+from iahash.verifier import verify_document
 
 WEB_DIR = Path(__file__).parent.parent / "web"
 
@@ -36,6 +37,20 @@ class IssuePayload(BaseModel):
 class VerifyResponse(BaseModel):
     valid: bool
     reason: str
+
+
+class PromptUrlPayload(BaseModel):
+    prompt_id: str | int = Field(..., description="Identificador lógico del prompt maestro")
+    provider: str = Field(..., description="Proveedor del chat compartido: chatgpt")
+    share_url: HttpUrl = Field(..., description="URL completa https://chatgpt.com/share/…")
+
+
+class PromptUrlResponse(BaseModel):
+    valid: bool
+    reason: str
+    provider: str
+    share_url: HttpUrl
+    document: IAHashDocument
 
 
 router = APIRouter(prefix="/api", tags=["IA-HASH"])
@@ -103,6 +118,40 @@ MASTER_PROMPTS = [
 @router.get("/master-prompts", summary="Listado de prompts maestros")
 def master_prompts() -> list[dict[str, str]]:
     return MASTER_PROMPTS
+
+
+@router.post(
+    "/verify/prompt_url",
+    summary="Verificar un chat compartido (prompt + respuesta)",
+    response_model=PromptUrlResponse,
+)
+def verify_prompt_from_url(payload: PromptUrlPayload) -> PromptUrlResponse:
+    provider = payload.provider.lower().strip()
+    if provider != "chatgpt":
+        raise HTTPException(status_code=400, detail="Proveedor no soportado: use 'chatgpt'")
+
+    try:
+        share = fetch_chatgpt_share(str(payload.share_url))
+    except ChatGPTShareError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    doc = issue_document(
+        prompt_text=share.prompt,
+        respuesta_text=share.response,
+        modelo=share.model or provider,
+        prompt_id=str(payload.prompt_id),
+        conversation_id=share.conversation_id,
+    )
+
+    valid, reason = verify_document(doc)
+
+    return PromptUrlResponse(
+        valid=valid,
+        reason=reason,
+        provider=provider,
+        share_url=payload.share_url,
+        document=doc,
+    )
 
 
 app = FastAPI(
