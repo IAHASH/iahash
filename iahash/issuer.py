@@ -6,19 +6,59 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from iahash.crypto import derive_iah_id, normalize_text, sha256_hex, sign_message
+from iahash.crypto import (
+    PROTOCOL_VERSION as CRYPTO_PROTOCOL_VERSION,
+    compute_pair_hashes,
+    derive_iah_id,
+    sign_message,
+)
 from iahash.db import store_iah_document
 
-PROTOCOL_VERSION = "IAHASH-1.2"
+# Re-export para compatibilidad con otros módulos (p.ej. verifier)
+PROTOCOL_VERSION = CRYPTO_PROTOCOL_VERSION
 
 
-def build_total_hash_string(protocol_version: str, prompt_id: Optional[str], h_prompt: str, h_response: str, model: str, timestamp: str) -> str:
+def build_total_hash_string(
+    protocol_version: str,
+    prompt_id: Optional[str],
+    h_prompt: str,
+    h_response: str,
+    model: str,
+    timestamp: str,
+) -> str:
+    """
+    Helper usado tanto en issuer como en verifier.
+
+    Representa exactamente el string que luego se hashea con SHA256 para producir h_total.
+    """
     prompt_value = prompt_id or ""
     model_value = model or "unknown"
-    return "|".join([protocol_version, prompt_value, h_prompt, h_response, model_value, timestamp])
+    return "|".join(
+        [
+            protocol_version,
+            prompt_value,
+            h_prompt,
+            h_response,
+            model_value,
+            timestamp,
+        ]
+    )
 
 
-def issue_pair(prompt_text: str, response_text: str, *, prompt_id: Optional[str] = None, model: str = "unknown", issuer_id: Optional[str] = None, issuer_pk_url: Optional[str] = None, subject_id: Optional[str] = None, store_raw: bool = False) -> Dict[str, Any]:
+def issue_pair(
+    prompt_text: str,
+    response_text: str,
+    *,
+    prompt_id: Optional[str] = None,
+    model: str = "unknown",
+    issuer_id: Optional[str] = None,
+    issuer_pk_url: Optional[str] = None,
+    subject_id: Optional[str] = None,
+    store_raw: bool = False,
+) -> Dict[str, Any]:
+    """
+    Emite un documento IA-HASH tipo PAIR (prompt + respuesta local).
+    """
     return _issue_document(
         prompt_text=prompt_text,
         response_text=response_text,
@@ -35,7 +75,23 @@ def issue_pair(prompt_text: str, response_text: str, *, prompt_id: Optional[str]
     )
 
 
-def issue_conversation(prompt_text: str, response_text: str, *, prompt_id: Optional[str], model: str, conversation_url: str, provider: str, issuer_id: Optional[str] = None, issuer_pk_url: Optional[str] = None, subject_id: Optional[str] = None, store_raw: bool = False) -> Dict[str, Any]:
+def issue_conversation(
+    prompt_text: str,
+    response_text: str,
+    *,
+    prompt_id: Optional[str],
+    model: str,
+    conversation_url: str,
+    provider: str,
+    issuer_id: Optional[str] = None,
+    issuer_pk_url: Optional[str] = None,
+    subject_id: Optional[str] = None,
+    store_raw: bool = False,
+) -> Dict[str, Any]:
+    """
+    Emite un documento IA-HASH tipo CONVERSATION, basado en una URL compartida
+    (p.ej. conversación de ChatGPT).
+    """
     return _issue_document(
         prompt_text=prompt_text,
         response_text=response_text,
@@ -67,21 +123,45 @@ def _issue_document(
     conversation_url: Optional[str],
     provider: Optional[str],
 ) -> Dict[str, Any]:
-    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    h_prompt = sha256_hex(normalize_text(prompt_text))
-    h_response = sha256_hex(normalize_text(response_text))
-    h_total_string = build_total_hash_string(PROTOCOL_VERSION, prompt_id, h_prompt, h_response, model, timestamp)
-    h_total = sha256_hex(h_total_string)
+    """
+    Función interna común a issue_pair / issue_conversation.
+    """
 
-    issuer_id_final = issuer_id or os.getenv("IAHASH_ISSUER_ID", "iahash.local")
-    issuer_pk_url_final = issuer_pk_url or os.getenv(
-        "IAHASH_ISSUER_PK_URL", "http://localhost:8000/keys/issuer_ed25519.pub"
+    # Timestamp en UTC, sin microsegundos, con sufijo Z
+    timestamp = (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
     )
 
+    # Hashes IA-HASH oficiales (h_prompt, h_response, h_total)
+    pair_hashes = compute_pair_hashes(
+        prompt_text=prompt_text,
+        response_text=response_text,
+        protocol_version=PROTOCOL_VERSION,
+        prompt_id=prompt_id,
+        model=model,
+        timestamp=timestamp,
+    )
+    h_prompt = pair_hashes.h_prompt
+    h_response = pair_hashes.h_response
+    h_total = pair_hashes.h_total
+
+    # Datos del emisor (issuer)
+    issuer_id_final = issuer_id or os.getenv("IAHASH_ISSUER_ID", "iahash.local")
+    issuer_pk_url_final = issuer_pk_url or os.getenv(
+        "IAHASH_ISSUER_PK_URL",
+        "http://localhost:8000/keys/issuer_ed25519.pub",
+    )
+
+    # Firma Ed25519 sobre h_total (como string hex)
     signature = sign_message(h_total.encode("utf-8"))
+
+    # ID público IA-HASH
     iah_id = derive_iah_id(h_total)
 
-    document = {
+    document: Dict[str, Any] = {
         "protocol_version": PROTOCOL_VERSION,
         "type": doc_type,
         "mode": mode,
@@ -104,5 +184,7 @@ def _issue_document(
         "iah_id": iah_id,
     }
 
+    # Persistimos en SQLite (tabla iahash_documents)
     store_iah_document(document)
+
     return document
