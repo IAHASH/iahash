@@ -1,65 +1,133 @@
 {% extends "base.html" %}
+{% block title %}IA-HASH · {{ prompt.title }}{% endblock %}
 {% block content %}
+  <div id="prompt-context" data-prompt-id="{{ prompt.id }}" data-prompt-title="{{ prompt.title }}" data-prompt-h="{{ prompt.h_public or '' }}"></div>
+
   <div class="section">
+    <p class="pill">Prompt maestro</p>
     <h2>{{ prompt.title }}</h2>
     <p class="muted">{{ prompt.description }}</p>
   </div>
 
   <div class="card">
-    <h3>Prompt Maestro</h3>
-    <textarea class="input" id="prompt-text" readonly style="height: 220px;">{{ prompt.full_prompt }}</textarea>
+    <div class="section-header">
+      <div>
+        <div class="badge">Prompt</div>
+        <h3>Texto completo</h3>
+        <p class="muted">Utiliza este prompt maestro para emitir IA-HASH consistentes.</p>
+      </div>
+    </div>
+    <label class="field-block">
+      <span class="field-label">Prompt maestro</span>
+      <textarea class="input" id="prompt-text" readonly style="height: 220px;">{{ prompt.full_prompt }}</textarea>
+    </label>
     <div class="muted" style="margin-top: 10px;">
       <div><strong>Slug:</strong> {{ prompt.slug }}</div>
       {% if prompt.h_public %}
         <div><strong>h_public:</strong> {{ prompt.h_public }}</div>
       {% endif %}
     </div>
-    <button class="button" style="margin-top: 10px;" onclick="copyPrompt()">Copiar Prompt</button>
+    <button id="copy-prompt-btn" class="button-secondary" style="margin-top: 10px;">Copiar Prompt</button>
   </div>
 
   <div class="card">
-    <h3>Generate IA-HASH</h3>
-    <textarea id="response-text" class="input" placeholder="Pega aquí la respuesta generada por la IA" style="height: 160px;"></textarea>
-
-    <div class="flex" style="margin-top: 10px; gap: 10px;">
-      <input id="pair-model" class="input" placeholder="Modelo (ej: gpt-4o)" value="unknown">
-      <label class="muted" style="align-self: center;">Prompt ID: {{ prompt.id }}</label>
+    <div class="section-header">
+      <div>
+        <div class="badge">Pair</div>
+        <h3>Generar IA-HASH con respuesta manual</h3>
+        <p class="muted">Pega la respuesta de la IA para crear un documento IA-HASH local.</p>
+      </div>
     </div>
-
-    <button class="button" style="margin-top: 10px;" onclick="generateIAHash({{ prompt.id }})">
-      Generate IA-HASH
-    </button>
-
-    <pre id="pair-log" class="muted" style="margin-top: 10px;"></pre>
+    <form id="pair-form" class="form-grid">
+      <label class="field-block">
+        <span class="field-label">Respuesta de la IA</span>
+        <textarea id="response-text" class="input" placeholder="Pega aquí la respuesta generada por la IA" rows="6"></textarea>
+      </label>
+      <div class="field-row">
+        <label class="field-block">
+          <span class="field-label">Modelo</span>
+          <select id="pair-model" class="input">
+            <option value="unknown" selected>unknown</option>
+            <option value="gpt-4.1">gpt-4.1</option>
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="claude-3.5">claude-3.5</option>
+          </select>
+        </label>
+        <div class="field-block">
+          <span class="field-label">Prompt ID</span>
+          <p class="muted" style="margin: 10px 0 0;">{{ prompt.id }}</p>
+        </div>
+        <div class="field-block">
+          <span class="field-label">&nbsp;</span>
+          <button class="button" type="submit" id="pair-submit">Generar IA-HASH</button>
+        </div>
+      </div>
+      <pre id="pair-log" class="muted result-raw"></pre>
+    </form>
+    <div id="pair-result" class="result-card" style="display:none; margin-top: 10px;"></div>
   </div>
 
   <div class="card">
-    <h3>Verificar respuesta (ChatGPT link)</h3>
-    <input id="conv-url" class="input" placeholder="https://chatgpt.com/share/..." style="margin-top: 10px;">
-
-    <div class="flex" style="margin-top: 10px; gap: 10px;">
-      <input id="conv-model" class="input" placeholder="Modelo (opcional)" value="unknown">
-      <select id="conv-provider" class="input">
-        <option value="chatgpt" selected>chatgpt</option>
-        <option value="unknown">unknown</option>
-      </select>
+    <div class="section-header">
+      <div>
+        <div class="badge">Prompt + URL</div>
+        <h3>Verificar conversación compartida</h3>
+        <p class="muted">Pega el enlace de ChatGPT para emitir el IA-HASH con el mismo rendering que Pair/Checker.</p>
+      </div>
     </div>
-
-    <!-- IMPORTANTE: ahora enviamos prompt.id, NO el slug -->
-    <button class="button" style="margin-top: 10px;" onclick="verifyShareWithIAHASH({{ prompt.id }})">
-      Verificar con IA-HASH
-    </button>
-
+    <div class="result-summary" id="share-summary" data-prompt-title="{{ prompt.title }}" data-prompt-h="{{ prompt.h_public or '' }}">
+      <div>
+        <p class="muted label">Prompt</p>
+        <p class="mono" data-summary="title">{{ prompt.title }}</p>
+      </div>
+      <div>
+        <p class="muted label">Hash público del prompt</p>
+        <p class="mono" data-summary="h-public">{{ prompt.h_public or '—' }}</p>
+      </div>
+      <div>
+        <p class="muted label">Proveedor</p>
+        <p class="mono" data-summary="provider">chatgpt</p>
+      </div>
+      <div>
+        <p class="muted label">Modelo</p>
+        <p class="mono" data-summary="model">chatgpt</p>
+      </div>
+      <div>
+        <p class="muted label">Conversation URL</p>
+        <p class="mono" data-summary="conversation-url">—</p>
+      </div>
+    </div>
+    <form class="form-grid" id="conversation-form">
+      <label class="field-block">
+        <span class="field-label">URL del chat</span>
+        <input id="conv-url" class="input" placeholder="https://chatgpt.com/share/..." />
+      </label>
+      <div class="field-row">
+        <label class="field-block">
+          <span class="field-label">Modelo</span>
+          <select id="conv-model" class="input">
+            <option value="chatgpt" selected>chatgpt</option>
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="gpt-4.1">gpt-4.1</option>
+            <option value="claude-3.5">claude-3.5</option>
+          </select>
+        </label>
+        <label class="field-block">
+          <span class="field-label">Proveedor</span>
+          <select id="conv-provider" class="input">
+            <option value="chatgpt" selected>chatgpt</option>
+          </select>
+        </label>
+        <div class="field-block">
+          <span class="field-label">&nbsp;</span>
+          <button class="button" type="submit" id="conv-submit">Verificar con IA-HASH</button>
+        </div>
+      </div>
+      <pre id="conv-log" class="muted result-raw"></pre>
+    </form>
     <div id="conv-result" class="result-card" style="display:none; margin-top: 10px;"></div>
-    <pre id="conv-log" class="muted" style="margin-top: 10px;"></pre>
   </div>
 
-  <div class="card">
-    <h3>Historial de verificaciones</h3>
-    <p class="muted">Próximamente: aquí aparecerán los últimos IA-HASH emitidos para este prompt.</p>
-  </div>
-
-  <script src="/static/js/iah_result.js"></script>
+  <script src="/static/js/iah_render.js"></script>
   <script src="/static/js/prompt_detail.js"></script>
-
 {% endblock %}

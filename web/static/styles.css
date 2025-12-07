@@ -473,6 +473,17 @@ p {
   gap: 10px;
 }
 
+.result-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: rgba(15, 23, 42, 0.75);
+  margin-bottom: 12px;
+}
+
 .result-details summary {
   cursor: pointer;
   color: #cbd5f5;

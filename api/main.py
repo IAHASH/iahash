@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, HttpUrl
@@ -17,6 +19,7 @@ from iahash.db import (
     create_sequence,
     ensure_db_initialized,
     get_iah_document_by_id,
+    get_prompt_by_id,
     get_prompt_by_slug,
     get_sequence_by_slug,
     list_prompts,
@@ -24,8 +27,12 @@ from iahash.db import (
 )
 from iahash.config import ISSUER_PK_URL
 from iahash.crypto import get_issuer_public_key_pem
-from iahash.extractors.chatgpt_share import extract_payload_from_chatgpt_share
+from iahash.extractors.chatgpt_share import (
+    extract_chatgpt_share,
+    extract_payload_from_chatgpt_share,
+)
 from iahash.issuer import PROTOCOL_VERSION, issue_conversation, issue_from_share, issue_pair
+from iahash.extractors.exceptions import UnsupportedProvider, UnreachableSource
 from iahash.verifier import verify_document
 
 APP_NAME = "IA-HASH API"
@@ -70,6 +77,91 @@ class IssueFromSharePayload(BaseModel):
     model: str | None = "chatgpt"
     prompt_id: str | None = None
     subject_id: str | None = None
+
+
+class IssueFromPromptUrlPayload(BaseModel):
+    prompt_id: str | None = None
+    provider: str = "chatgpt"
+    share_url: str
+    model: str | None = None
+    subject_id: str | None = None
+
+
+class VerifySharePayload(BaseModel):
+    share_url: str
+
+
+logger = logging.getLogger(__name__)
+
+CHATGPT_SHARE_PATTERN = re.compile(
+    r"^https://(chatgpt\.com|chat\.openai\.com)/share/[0-9a-fA-F\-]+$"
+)
+
+
+def _issue_response(document: Dict[str, Any]) -> Dict[str, Any]:
+    """Uniform response envelope for issuing endpoints."""
+
+    return {"status": "ISSUED", "document": document, "error": None}
+
+
+def _error_response(
+    code: str, message: str, *, status_code: int = 400
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ERROR",
+            "document": None,
+            "error": {"code": code, "message": message},
+        },
+    )
+
+
+def _share_error_response(
+    reason: str,
+    message: str,
+    *,
+    status_code: int = 400,
+    conversation_url: str | None = None,
+):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": False,
+            "reason": reason,
+            "error": message,
+            "extracted_prompt": None,
+            "extracted_answer": None,
+            "provider": None,
+            "model": None,
+            "conversation_url": conversation_url,
+        },
+    )
+
+
+def _resolve_prompt_id(prompt_id: Optional[str]) -> Optional[str]:
+    if prompt_id is None:
+        return None
+
+    prompt_record = None
+    try:
+        prompt_record = get_prompt_by_slug(str(prompt_id))
+    except Exception:
+        prompt_record = None
+
+    if prompt_record is None:
+        try:
+            prompt_int = int(prompt_id)
+        except (TypeError, ValueError):
+            prompt_int = None
+
+        if prompt_int is not None:
+            prompt_record = get_prompt_by_id(prompt_int)
+
+    if prompt_record is None:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    return str(prompt_record.get("id") or prompt_id)
 
 
 class SequenceStepPayload(BaseModel):
@@ -196,7 +288,10 @@ def api_info() -> Dict[str, Any]:
         "standard": PROTOCOL_VERSION,
         "endpoints": {
             "pair_issue": "/api/verify/pair",
+            "share_verify": "/api/verify/share",
             "conversation_issue": "/api/verify/conversation",
+            "issue_from_prompt_url": "/api/issue/from_prompt_url",
+            "issue_from_prompt_url_deprecated": "/api/verify/prompt_url",
             "check": "/api/check",
             "prompts": "/api/prompts",
             "prompt": "/api/prompts/{slug}",
@@ -241,7 +336,7 @@ def get_public_key() -> Dict[str, str]:
 @app.post("/api/verify/pair")
 def api_verify_pair(payload: IssuePairRequest) -> Dict[str, Any]:
     try:
-        return issue_pair(
+        document = issue_pair(
             prompt_text=payload.prompt_text,
             response_text=payload.response_text,
             prompt_id=payload.prompt_id,
@@ -251,14 +346,64 @@ def api_verify_pair(payload: IssuePairRequest) -> Dict[str, Any]:
             subject_id=payload.subject_id,
             store_raw=payload.store_raw,
         )
+        return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/verify/share")
+def api_verify_share(payload: VerifySharePayload) -> Dict[str, Any]:
+    share_url = (payload.share_url or "").strip()
+    if not CHATGPT_SHARE_PATTERN.match(share_url):
+        return _share_error_response(
+            "INVALID_URL",
+            "URL inválida. Debe ser un enlace https://chatgpt.com/share/... o https://chat.openai.com/share/...",
+        )
+
+    try:
+        extracted = extract_chatgpt_share(share_url)
+    except UnsupportedProvider:
+        return _share_error_response(
+            "PARSING_FAILED", "Unsupported or unreadable ChatGPT share page"
+        )
+    except UnreachableSource:
+        return _share_error_response("FETCH_FAILED", "Cannot fetch ChatGPT share URL")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Unexpected error verifying share URL", exc_info=exc)
+        return _share_error_response(
+            "INTERNAL_ERROR",
+            "Unexpected error verifying share URL",
+            status_code=500,
+        )
+
+    prompt_text = extracted.get("prompt_text") if extracted else None
+    response_text = extracted.get("response_text") if extracted else None
+
+    if not prompt_text or not response_text:
+        return _share_error_response(
+            "PARSING_FAILED",
+            "No se pudo extraer prompt o respuesta desde la conversación compartida",
+        )
+
+    provider = extracted.get("provider") or "chatgpt"
+    model_value = extracted.get("model") or "unknown"
+
+    return {
+        "success": True,
+        "reason": None,
+        "error": None,
+        "extracted_prompt": prompt_text,
+        "extracted_answer": response_text,
+        "provider": provider,
+        "model": model_value,
+        "conversation_url": share_url,
+    }
 
 
 @app.post("/api/verify/conversation")
 def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]:
     try:
-        return issue_conversation(
+        document = issue_conversation(
             prompt_text=payload.prompt_text,
             response_text=payload.response_text,
             prompt_id=payload.prompt_id,
@@ -270,6 +415,7 @@ def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]
             subject_id=payload.subject_id,
             store_raw=payload.store_raw,
         )
+        return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -311,7 +457,7 @@ async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]
         raise HTTPException(status_code=400, detail="No se pudo extraer prompt o respuesta")
 
     try:
-        return issue_from_share(
+        document = issue_from_share(
             prompt_text=prompt_text,
             response_text=response_text,
             model=model_value,
@@ -319,8 +465,97 @@ async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]
             prompt_id=payload.prompt_id,
             subject_id=payload.subject_id,
         )
+        return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _issue_prompt_from_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]:
+    provider = (payload.provider or "").lower() or "chatgpt"
+    if provider and provider != "chatgpt":
+        return _error_response("UNSUPPORTED_PROVIDER", "Unsupported provider")
+
+    share_url = (payload.share_url or "").strip()
+    if not CHATGPT_SHARE_PATTERN.match(share_url):
+        return _error_response(
+            "INVALID_URL",
+            "URL inválida. Debe ser un enlace https://chatgpt.com/share/...",
+        )
+
+    try:
+        resolved_prompt_id = _resolve_prompt_id(payload.prompt_id)
+    except HTTPException as exc:
+        return _error_response("PROMPT_NOT_FOUND", exc.detail, status_code=exc.status_code)
+
+    try:
+        extracted = extract_chatgpt_share(share_url)
+    except UnsupportedProvider as exc:
+        return _error_response("INVALID_URL", "Invalid or unsupported share URL")
+    except UnreachableSource as exc:  # pragma: no cover - network defensive
+        return _error_response(
+            "FETCH_FAILED", "Cannot fetch ChatGPT share URL"
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        return _error_response(
+            "INTERNAL_ERROR",
+            "Unexpected error extracting conversation",
+            status_code=500,
+        )
+
+    prompt_text = extracted.get("prompt_text")
+    response_text = extracted.get("response_text")
+
+    if not prompt_text or not response_text:
+        return _error_response(
+            "PARSING_FAILED", "Cannot extract conversation from share URL"
+        )
+
+    model_value = (
+        extracted.get("model")
+        or payload.model
+        or ("chatgpt" if provider == "chatgpt" else "unknown")
+    )
+    if model_value == "unknown" and not payload.model:
+        model_value = "chatgpt" if provider == "chatgpt" else "unknown"
+    if not model_value:
+        model_value = "chatgpt" if provider == "chatgpt" else "unknown"
+
+    try:
+        document = issue_from_share(
+            prompt_text=prompt_text,
+            response_text=response_text,
+            model=model_value,
+            share_url=share_url,
+            prompt_id=resolved_prompt_id,
+            subject_id=payload.subject_id,
+            store_raw=True,
+        )
+    except ValueError as exc:
+        return _error_response("PARSING_FAILED", str(exc))
+    except Exception as exc:  # pragma: no cover - defensive
+        return _error_response(
+            "INTERNAL_ERROR", "Unexpected issuing error", status_code=500
+        )
+
+    return _issue_response(document)
+
+
+@app.post("/api/issue/from_prompt_url")
+def api_issue_from_prompt_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]:
+    return _issue_prompt_from_url(payload)
+
+
+@app.post("/api/verify/prompt_url", deprecated=True)
+def api_verify_prompt_url(
+    payload: IssueFromPromptUrlPayload, response: Response
+) -> Dict[str, Any]:
+    """Deprecated alias kept for backward compatibility."""
+
+    logger.warning(
+        "Deprecated endpoint /api/verify/prompt_url called; prefer /api/issue/from_prompt_url"
+    )
+    response.headers["X-IAHASH-Deprecated"] = "true"
+    return _issue_prompt_from_url(payload)
 
 
 @app.get("/api/prompts")
