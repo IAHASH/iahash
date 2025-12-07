@@ -1,37 +1,58 @@
 {% extends "base.html" %}
 {% block content %}
-  <div class="card">
-    <span class="badge">{{ prompt.category or 'general' }}</span>
+  <div class="section">
     <h2>{{ prompt.title }}</h2>
     <p class="muted">{{ prompt.description }}</p>
-    <div class="section">
-      <h3>Prompt maestro</h3>
-      <textarea readonly>{{ prompt.full_prompt or '' }}</textarea>
-      <div class="flex" style="margin-top: 10px;">
-        <button class="button" onclick="navigator.clipboard.writeText(`{{ prompt.full_prompt | replace('`','\\`') }}`)">Copiar prompt</button>
-        <span class="badge">Slug: {{ prompt.slug }}</span>
-      </div>
-    </div>
-    <div class="section">
-      <h3>Generar IA-HASH</h3>
-      <p class="muted">Pega la URL compartida de ChatGPT para verificar la conversación.</p>
-      <input id="chat-url" class="input" placeholder="https://chatgpt.com/share/...">
-      <button class="button" style="margin-top: 10px;" onclick="verifyConversation()">Generate IA-HASH</button>
-      <pre id="log" class="muted"></pre>
-    </div>
   </div>
+
+  <div class="card">
+    <h3>Prompt Maestro</h3>
+    <textarea class="input" id="prompt-text" readonly style="height: 220px;">{{ prompt.body }}</textarea>
+    <button class="button" style="margin-top: 10px;" onclick="copyPrompt()">Copiar Prompt</button>
+  </div>
+
+  <div class="card">
+    <h3>Verificar respuesta (ChatGPT link)</h3>
+    <input id="conv-url" class="input" placeholder="https://chatgpt.com/share/..." style="margin-top: 10px;">
+    
+    <!-- IMPORTANTE: ahora enviamos prompt.id, NO el slug -->
+    <button class="button" style="margin-top: 10px;" onclick="verifyConversation({{ prompt.id }})">
+      Verificar con IA-HASH
+    </button>
+
+    <pre id="conv-log" class="muted" style="margin-top: 10px;"></pre>
+  </div>
+
+  <div class="card">
+    <h3>Historial de verificaciones</h3>
+    <p class="muted">Próximamente: aquí aparecerán los últimos IA-HASH emitidos para este prompt.</p>
+  </div>
+
   <script>
-    async function verifyConversation() {
-      const url = document.getElementById('chat-url').value;
-      const log = document.getElementById('log');
-      log.textContent = 'Verificando...';
+    function copyPrompt() {
+      const text = document.getElementById('prompt-text').value;
+      navigator.clipboard.writeText(text);
+      alert('Prompt copiado al portapapeles.');
+    }
+
+    async function verifyConversation(promptId) {
+      const url = document.getElementById('conv-url').value;
+      const payload = {
+        url: url,
+        prompt_id: promptId  // IMPORTANTE: numeric id
+      };
+
+      document.getElementById('conv-log').textContent = "Procesando verificación...";
+
       const res = await fetch('/api/verify/conversation', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ url, prompt_id: '{{ prompt.slug }}', store_raw: false })
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
       });
-      const data = await res.json();
-      log.textContent = JSON.stringify(data, null, 2);
+
+      const json = await res.json();
+      document.getElementById('conv-log').textContent = JSON.stringify(json, null, 2);
     }
   </script>
+
 {% endblock %}
