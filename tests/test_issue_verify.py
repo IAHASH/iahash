@@ -31,7 +31,7 @@ def test_issue_and_verify_roundtrip(monkeypatch, temp_keys):
     result = verify_document(doc)
 
     assert result["valid"] is True
-    assert result["status"] == VerificationStatus.VALID
+    assert result["status"] == VerificationStatus.VERIFIED
 
 
 def test_verifier_detects_tampering(monkeypatch, temp_keys):
@@ -56,7 +56,8 @@ def test_verifier_detects_tampering(monkeypatch, temp_keys):
     result = verify_document(tampered)
 
     assert result["valid"] is False
-    assert result["status"] == VerificationStatus.PROMPT_MISMATCH
+    assert result["status"] == VerificationStatus.INVALID_SIGNATURE
+    assert result["status_detail"] == "CONTENT_MISMATCH"
     assert any("Prompt" in error or "prompt" in error for error in result["errors"])
     assert result.get("normalized_prompt_text")
     assert result.get("differences", {}).get("hashes", {}).get("h_prompt")

@@ -89,6 +89,24 @@ def test_master_prompt_detail_and_create(temp_keys, monkeypatch, tmp_path):
     created = create_resp.json()
     assert created["prompt_hash"]
     assert created["id"] == "custom-api"
+
+
+def test_public_key_file_endpoint(temp_keys, monkeypatch):
+    monkeypatch.setenv("IAHASH_KEYS_DIR", str(temp_keys))
+    monkeypatch.setenv("IAHASH_BASE_URL", "http://testserver")
+
+    client = create_client()
+
+    resp = client.get("/keys/issuer_ed25519.pub")
+    assert resp.status_code == 200
+    pem_text = (temp_keys / "issuer_ed25519.pub").read_text()
+    assert resp.text.strip() == pem_text.strip()
+
+    public_meta = client.get("/public-key")
+    assert public_meta.status_code == 200
+    data = public_meta.json()
+    assert data["issuer_pk_url"].endswith("/keys/issuer_ed25519.pub")
+    assert "PUBLIC KEY" in data["pem"]
 from fastapi.testclient import TestClient
 
 from iahash import prompts
