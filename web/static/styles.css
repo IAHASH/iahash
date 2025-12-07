@@ -183,6 +183,12 @@ p {
   gap: 12px;
 }
 
+.actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -197,6 +203,10 @@ p {
   box-shadow: var(--shadow-soft);
   display: grid;
   gap: 10px;
+}
+
+.step-card {
+  border-style: dashed;
 }
 
 .link-card {
@@ -248,6 +258,15 @@ p {
   color: #bbf7d0;
 }
 
+.button.danger {
+  border-color: rgba(249, 115, 115, 0.5);
+  color: #fecdd3;
+}
+
+.button.ghost {
+  background: transparent;
+}
+
 .input {
   width: 100%;
   padding: 10px 12px;
@@ -288,6 +307,12 @@ p {
 
 .form-grid {
   display: grid;
+  gap: 12px;
+}
+
+.stacked {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 

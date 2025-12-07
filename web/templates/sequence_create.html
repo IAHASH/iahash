@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Crear secuencia · IA-HASH{% endblock %}
+{% block content %}
+  <div class="section">
+    <p class="pill">Secuencias</p>
+    <h2>Crear nueva secuencia</h2>
+    <p class="muted">Define pasos encadenados basados en prompts maestros.</p>
+  </div>
+
+  <div class="card">
+    <form id="sequence-form" class="form-grid">
+      <div class="field-row">
+        <label class="field-block">
+          <span class="field-label">Slug</span>
+          <input class="input" name="slug" placeholder="onboarding-ia" required />
+        </label>
+        <label class="field-block">
+          <span class="field-label">Título</span>
+          <input class="input" name="title" placeholder="Proceso de onboarding IA" required />
+        </label>
+      </div>
+
+      <label class="field-block">
+        <span class="field-label">Descripción</span>
+        <textarea class="input" name="description" rows="2" placeholder="Qué resuelve esta secuencia"></textarea>
+      </label>
+
+      <div class="field-row">
+        <label class="field-block">
+          <span class="field-label">Categoría</span>
+          <input class="input" name="category" placeholder="ops, marketing, datos" />
+        </label>
+        <label class="field-block">
+          <span class="field-label">Visibilidad</span>
+          <select class="input" name="visibility">
+            <option value="public" selected>Pública</option>
+            <option value="private">Privada</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="section-header">
+        <div>
+          <p class="badge">Pasos</p>
+          <h3>Define el flujo</h3>
+          <p class="muted">Añade cada etapa con su prompt maestro asociado.</p>
+        </div>
+        <button type="button" class="button secondary" id="add-step">Añadir paso</button>
+      </div>
+
+      <div id="steps-container" class="stacked"></div>
+
+      <div class="field-row">
+        <div class="field-block">
+          <button class="button" type="submit">Guardar secuencia</button>
+        </div>
+        <div class="field-block">
+          <p id="sequence-message" class="muted"></p>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <template id="step-template">
+    <div class="card step-card">
+      <div class="section-header">
+        <div>
+          <p class="muted">Paso <span class="step-number">1</span></p>
+          <h4 class="step-title-label">Nuevo paso</h4>
+        </div>
+        <button type="button" class="button danger ghost remove-step">Eliminar</button>
+      </div>
+      <div class="field-row">
+        <label class="field-block">
+          <span class="field-label">Título</span>
+          <input class="input step-title" placeholder="Instrucciones iniciales" required />
+        </label>
+        <label class="field-block">
+          <span class="field-label">Prompt maestro (opcional)</span>
+          <select class="input step-prompt">
+            <option value="">Sin prompt</option>
+            {% for prompt in prompts %}
+              <option value="{{ prompt.id }}">{{ prompt.title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <label class="field-block">
+        <span class="field-label">Descripción</span>
+        <textarea class="input step-description" rows="2" placeholder="Notas adicionales"></textarea>
+      </label>
+    </div>
+  </template>
+
+  <script src="/static/js/sequence_create.js"></script>
+{% endblock %}
