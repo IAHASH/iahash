@@ -425,8 +425,8 @@ def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]
 @app.post("/api/check")
 def api_check(payload: CheckRequest) -> Dict[str, Any]:
     verification = verify_document(payload.document)
-    document = dict(payload.document)
 
+    document = dict(payload.document)
     resolved_issuer = verification.get("resolved_issuer_pk_url")
     if not document.get("issuer_pk_url") and resolved_issuer:
         document["issuer_pk_url"] = resolved_issuer
