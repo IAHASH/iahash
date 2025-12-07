@@ -86,6 +86,16 @@ app = FastAPI(
 )
 
 
+"""
+Inicialización temprana de la base de datos.
+
+`TestClient(app)` de Starlette no siempre ejecuta los eventos de startup
+cuando no se usa como contexto, así que inicializamos aquí para que los
+tests y scripts tengan el esquema disponible incluso sin lifecycle events.
+"""
+ensure_db_initialized()
+
+
 @app.on_event("startup")
 def initialize_database() -> None:
     ensure_db_initialized()
