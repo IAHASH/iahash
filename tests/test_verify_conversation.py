@@ -48,7 +48,7 @@ def test_verify_conversation_success(temp_keys, monkeypatch):
     client = create_client()
 
     html = build_share_html("Hola", "Mundo", "gpt-4o")
-    monkeypatch.setattr(chatgpt_share, "fetch_share_html", lambda url: html)
+    monkeypatch.setattr(chatgpt_share, "_download_html", lambda url: html)
 
     resp = client.post(
         "/api/verify/conversation",
@@ -73,9 +73,9 @@ def test_verify_conversation_unreachable(temp_keys, monkeypatch):
     client = create_client()
 
     def _raise(_url):
-        raise RuntimeError(chatgpt_share.ERROR_UNREACHABLE)
+        raise chatgpt_share.UnreachableSource("boom")
 
-    monkeypatch.setattr(chatgpt_share, "fetch_share_html", _raise)
+    monkeypatch.setattr(chatgpt_share, "_download_html", _raise)
 
     resp = client.post(
         "/api/verify/conversation",
@@ -97,7 +97,7 @@ def test_verify_conversation_unsupported_format(temp_keys, monkeypatch):
     monkeypatch.setenv("IAHASH_KEYS_DIR", str(temp_keys))
     client = create_client()
 
-    monkeypatch.setattr(chatgpt_share, "fetch_share_html", lambda url: "<html></html>")
+    monkeypatch.setattr(chatgpt_share, "_download_html", lambda url: "<html></html>")
 
     resp = client.post(
         "/api/verify/conversation",

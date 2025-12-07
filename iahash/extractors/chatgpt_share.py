@@ -4,30 +4,47 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
+from urllib.parse import urlparse
 
 import httpx
 
-ERROR_UNREACHABLE = "UNREACHABLE"
-ERROR_PARSING = "PARSING_ERROR"
-ERROR_UNSUPPORTED = "UNSUPPORTED_FORMAT"
+from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
+
+CHATGPT_SHARE_HOSTS = {"chat.openai.com", "chatgpt.com"}
+SHARE_PATH_FRAGMENT = "/share/"
+
+__all__ = ["extract_from_url", "extract_chatgpt_share"]
 
 
-class ExtractedConversation(Dict[str, Any]):
-    pass
+def _validate_share_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise UnsupportedProvider("Unsupported conversation provider")
+
+    hostname = (parsed.hostname or "").lower()
+    if hostname not in CHATGPT_SHARE_HOSTS:
+        raise UnsupportedProvider("Unsupported conversation provider")
+
+    if SHARE_PATH_FRAGMENT not in parsed.path:
+        raise UnsupportedProvider("Unsupported conversation format")
 
 
-def fetch_share_html(url: str) -> str:
+def _download_html(url: str, *, timeout: float = 15.0) -> str:
     try:
-        response = httpx.get(url, timeout=15)
+        response = httpx.get(url, timeout=timeout, follow_redirects=True)
         response.raise_for_status()
         return response.text
-    except Exception as exc:
-        raise RuntimeError(ERROR_UNREACHABLE) from exc
+    except httpx.HTTPError as exc:  # pragma: no cover - defensive branch
+        raise UnreachableSource(f"Unable to download shared conversation: {exc}") from exc
 
 
-def parse_next_data(html: str) -> Optional[Dict[str, Any]]:
-    match = re.search(r"<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", html, re.DOTALL)
+def _parse_next_data(html: str) -> Optional[Dict]:
+    match = re.search(
+        r"<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>",
+        html,
+        re.DOTALL,
+    )
     if not match:
         return None
     try:
@@ -36,51 +53,79 @@ def parse_next_data(html: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def extract_messages(next_data: Dict[str, Any]) -> tuple[Optional[str], Optional[str], Optional[str]]:
-    try:
-        conversation = next_data["props"]["pageProps"].get("sharedConversation") or next_data["props"]["pageProps"].get("serverResponse", {}).get("data", {})
-    except Exception:
-        conversation = None
-    if not conversation:
-        return None, None, None
-
-    mapping = conversation.get("mapping") or {}
-    user_messages = []
-    assistant_messages = []
+def _collect_messages(mapping: Dict) -> tuple[Optional[str], Optional[str]]:
+    users: list[str] = []
+    assistants: list[str] = []
     for node in mapping.values():
         message = node.get("message") if isinstance(node, dict) else None
         if not message:
             continue
         author_role = (message.get("author") or {}).get("role")
-        content_parts = message.get("content", {}).get("parts") or []
-        text = "\n".join(part for part in content_parts if isinstance(part, str))
+        parts = message.get("content", {}).get("parts") or []
+        text = "\n".join(part for part in parts if isinstance(part, str))
         if author_role == "user":
-            user_messages.append(text)
+            users.append(text)
         elif author_role == "assistant":
-            assistant_messages.append(text)
-    prompt_text = user_messages[0] if user_messages else None
-    response_text = assistant_messages[-1] if assistant_messages else None
-    model = conversation.get("modelSlug") or conversation.get("model")
-    return prompt_text, response_text, model
+            assistants.append(text)
+    prompt_text = users[0] if users else None
+    response_text = assistants[-1] if assistants else None
+    return prompt_text, response_text
 
 
-def extract_chatgpt_share(url: str) -> ExtractedConversation:
+def _extract_payload(next_data: Dict) -> Dict[str, str]:
     try:
-        html = fetch_share_html(url)
-    except RuntimeError as exc:
-        return {"error": str(exc)}
-    next_data = parse_next_data(html)
-    if not next_data:
-        return {"error": ERROR_UNSUPPORTED}
+        conversation = (
+            next_data["props"]["pageProps"].get("sharedConversation")
+            or next_data["props"]["pageProps"].get("serverResponse", {}).get("data", {})
+        )
+    except Exception as exc:  # pragma: no cover - defensive branch
+        raise UnsupportedProvider("Unsupported conversation format") from exc
 
-    prompt_text, response_text, model = extract_messages(next_data)
+    if not conversation:
+        raise UnsupportedProvider("Unsupported conversation format")
+
+    mapping = conversation.get("mapping") or {}
+    prompt_text, response_text = _collect_messages(mapping)
     if not prompt_text or not response_text:
-        return {"error": ERROR_PARSING}
+        raise UnsupportedProvider("Unsupported conversation format")
 
+    model = conversation.get("modelSlug") or conversation.get("model") or "unknown"
     return {
         "prompt_text": prompt_text,
         "response_text": response_text,
-        "model": model or "unknown",
+        "model": model,
         "provider": "chatgpt",
-        "conversation_url": url,
     }
+
+
+def extract_from_url(url: str) -> Dict[str, str]:
+    """Descarga y extrae una conversación compartida de ChatGPT.
+
+    Args:
+        url: Enlace público generado por ChatGPT para compartir una conversación.
+
+    Raises:
+        UnsupportedProvider: si la URL no coincide con ChatGPT share o el formato es desconocido.
+        UnreachableSource: si ocurre un error al descargar el HTML.
+
+    Returns:
+        Diccionario con prompt, respuesta, modelo y proveedor.
+    """
+
+    _validate_share_url(url)
+    html = _download_html(url)
+
+    next_data = _parse_next_data(html)
+    if not next_data:
+        raise UnsupportedProvider("Unsupported conversation format")
+
+    payload = _extract_payload(next_data)
+    payload["conversation_url"] = url
+    return payload
+
+
+def extract_chatgpt_share(url: str) -> Dict[str, str]:
+    """Alias de compatibilidad para código existente."""
+
+    return extract_from_url(url)
+

@@ -15,12 +15,8 @@ from iahash.crypto import (
     sign_message,
 )
 from iahash.db import store_iah_document
-from iahash.extractors.chatgpt_share import (
-    ERROR_PARSING,
-    ERROR_UNREACHABLE,
-    ERROR_UNSUPPORTED,
-    extract_chatgpt_share,
-)
+from iahash.extractors.chatgpt_share import extract_chatgpt_share
+from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
 
 # Re-export para compatibilidad con otros módulos (p.ej. verifier)
 PROTOCOL_VERSION = CRYPTO_PROTOCOL_VERSION
@@ -103,16 +99,12 @@ def issue_conversation(
     if provider and provider.lower() != "chatgpt":
         raise ValueError("Unsupported conversation provider")
 
-    extracted = extract_chatgpt_share(conversation_url)
-    if extracted.get("error"):
-        detail = extracted["error"]
-        if detail == ERROR_UNREACHABLE:
-            raise RuntimeError("Conversation URL unreachable")
-        if detail == ERROR_PARSING:
-            raise RuntimeError("Conversation content could not be parsed")
-        if detail == ERROR_UNSUPPORTED:
-            raise RuntimeError("Conversation format unsupported")
-        raise RuntimeError(detail)
+    try:
+        extracted = extract_chatgpt_share(conversation_url)
+    except UnreachableSource as exc:
+        raise RuntimeError("Conversation URL unreachable") from exc
+    except UnsupportedProvider as exc:
+        raise ValueError(str(exc)) from exc
 
     extracted_prompt = extracted.get("prompt_text") or prompt_text
     extracted_response = extracted.get("response_text") or response_text

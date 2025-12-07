@@ -12,12 +12,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from iahash.crypto import normalize_text, sha256_hex, verify_signature
 from iahash.issuer import PROTOCOL_VERSION, build_total_hash_string
-from iahash.extractors.chatgpt_share import (
-    ERROR_PARSING,
-    ERROR_UNREACHABLE,
-    ERROR_UNSUPPORTED,
-    extract_chatgpt_share,
-)
+from iahash.extractors.chatgpt_share import extract_chatgpt_share
+from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
 
 
 _PUBLIC_KEY_CACHE: Dict[str, Ed25519PublicKey] = {}
@@ -136,23 +132,15 @@ def verify_document(
 
         try:
             extracted = extract_chatgpt_share(conversation_url)
+        except UnreachableSource as exc:
+            status = VerificationStatus.UNREACHABLE_SOURCE
+            return _fail(status, f"Conversation URL unreachable: {exc}")
+        except UnsupportedProvider as exc:
+            status = VerificationStatus.UNSUPPORTED_PROVIDER
+            return _fail(status, str(exc))
         except Exception as exc:  # pragma: no cover - extractor defensivo
             status = VerificationStatus.UNREACHABLE_SOURCE
             return _fail(status, f"Unable to fetch conversation: {exc}")
-
-        if extracted.get("error"):
-            detail = extracted["error"]
-            if detail == ERROR_UNREACHABLE:
-                status = VerificationStatus.UNREACHABLE_SOURCE
-                return _fail(status, "Conversation URL unreachable")
-            if detail == ERROR_UNSUPPORTED:
-                status = VerificationStatus.UNSUPPORTED_PROVIDER
-                return _fail(status, "Unsupported conversation format")
-            if detail == ERROR_PARSING:
-                status = VerificationStatus.PROMPT_MISMATCH
-                return _fail(status, "Conversation content could not be parsed")
-            status = VerificationStatus.UNREACHABLE_SOURCE
-            return _fail(status, str(detail))
 
         fetched_prompt = extracted.get("prompt_text")
         fetched_response = extracted.get("response_text")
