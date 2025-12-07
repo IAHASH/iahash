@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hmac
 import os
+import sqlite3
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from iahash.crypto import (
     PROTOCOL_VERSION as CRYPTO_PROTOCOL_VERSION,
@@ -12,9 +14,10 @@ from iahash.crypto import (
     derive_iah_id,
     load_ed25519_private_key,
     normalize_text,
+    sha256_hex,
     sign_message,
 )
-from iahash.db import store_iah_document
+from iahash.db import get_prompt_by_id, get_prompt_by_slug, store_iah_document
 from iahash.extractors.chatgpt_share import (
     ERROR_PARSING,
     ERROR_UNREACHABLE,
@@ -24,6 +27,62 @@ from iahash.extractors.chatgpt_share import (
 
 # Re-export para compatibilidad con otros módulos (p.ej. verifier)
 PROTOCOL_VERSION = CRYPTO_PROTOCOL_VERSION
+
+
+def _compute_prompt_hmac(prompt_text: str, *, secret_key: str) -> str:
+    normalized = normalize_text(prompt_text)
+    return hmac.new(secret_key.encode("utf-8"), normalized.encode("utf-8"), "sha256").hexdigest()
+
+
+def _get_prompt_record(prompt_id: str | int) -> Optional[Dict[str, Any]]:
+    prompt_pk: Optional[int]
+    try:
+        prompt_pk = int(prompt_id)
+    except (TypeError, ValueError):
+        prompt_pk = None
+
+    try:
+        if prompt_pk is not None:
+            prompt = get_prompt_by_id(prompt_pk)
+            if prompt:
+                return prompt
+    except sqlite3.Error:
+        return None
+
+    try:
+        return get_prompt_by_slug(str(prompt_id))
+    except sqlite3.Error:
+        return None
+
+
+def _validate_master_prompt(prompt: Dict[str, Any], prompt_text: str) -> Tuple[str, str]:
+    if not prompt:
+        raise ValueError("Prompt maestro no encontrado")
+    if not prompt.get("is_master"):
+        raise ValueError("El prompt indicado no está marcado como maestro")
+
+    stored_prompt_text = prompt.get("full_prompt") or ""
+    normalized_input = normalize_text(prompt_text)
+    normalized_master = normalize_text(stored_prompt_text)
+
+    if normalized_input != normalized_master:
+        raise ValueError("El texto proporcionado no coincide con el prompt maestro")
+
+    computed_public = sha256_hex(normalized_master.encode("utf-8"))
+    stored_public = prompt.get("h_public")
+    if stored_public and stored_public != computed_public:
+        raise ValueError("h_public almacenado no coincide con el prompt maestro")
+
+    hmac_key = os.getenv("IAHASH_PROMPT_HMAC_KEY")
+    if not hmac_key:
+        raise ValueError("IAHASH_PROMPT_HMAC_KEY requerido para validar prompt maestro")
+
+    computed_secret = _compute_prompt_hmac(normalized_master, secret_key=hmac_key)
+    stored_secret = prompt.get("h_secret")
+    if stored_secret and stored_secret != computed_secret:
+        raise ValueError("h_secret almacenado no coincide con el prompt maestro")
+
+    return computed_public, computed_secret
 
 
 def build_total_hash_string(
@@ -111,7 +170,7 @@ def issue_conversation(
         if detail == ERROR_PARSING:
             raise RuntimeError("Conversation content could not be parsed")
         if detail == ERROR_UNSUPPORTED:
-            raise RuntimeError("Conversation format unsupported")
+            raise RuntimeError("Unsupported conversation format")
         raise RuntimeError(detail)
 
     extracted_prompt = extracted.get("prompt_text") or prompt_text
@@ -119,7 +178,7 @@ def issue_conversation(
     extracted_model = extracted.get("model") or model
     extracted_provider = extracted.get("provider") or provider
 
-    if prompt_id is not None:
+    if prompt_id is not None and prompt_text is not None:
         if normalize_text(prompt_text) != normalize_text(extracted_prompt):
             raise ValueError("Extracted prompt does not match master prompt")
 
@@ -158,6 +217,20 @@ def _issue_document(
     Función interna común a issue_pair / issue_conversation.
     """
 
+    prompt_public_hash: Optional[str] = None
+    prompt_hmac: Optional[str] = None
+    prompt_hmac_verified = False
+    prompt_id_value: Optional[str] = None
+
+    prompt_record = _get_prompt_record(prompt_id) if prompt_id is not None else None
+
+    if prompt_record:
+        prompt_public_hash, prompt_hmac = _validate_master_prompt(prompt_record, prompt_text)
+        prompt_hmac_verified = True
+        prompt_id_value = str(prompt_record.get("id") or prompt_id)
+    elif prompt_id is not None:
+        prompt_id_value = str(prompt_id)
+
     # Timestamp en UTC, sin microsegundos, con sufijo Z
     timestamp = (
         datetime.now(timezone.utc)
@@ -171,7 +244,7 @@ def _issue_document(
         prompt_text=prompt_text,
         response_text=response_text,
         protocol_version=PROTOCOL_VERSION,
-        prompt_id=prompt_id,
+        prompt_id=prompt_id_value,
         model=model,
         timestamp=timestamp,
     )
@@ -198,8 +271,9 @@ def _issue_document(
         "protocol_version": PROTOCOL_VERSION,
         "type": doc_type,
         "mode": mode,
-        "prompt_id": prompt_id,
-        "prompt_hmac_verified": prompt_id is not None,
+        "prompt_id": prompt_id_value,
+        "prompt_hmac": prompt_hmac,
+        "prompt_hmac_verified": prompt_hmac_verified,
         "timestamp": timestamp,
         "model": model,
         "h_prompt": h_prompt,
@@ -216,6 +290,9 @@ def _issue_document(
         "raw_response_text": response_text if store_raw else None,
         "iah_id": iah_id,
     }
+
+    if prompt_public_hash:
+        document["prompt_public_hash"] = prompt_public_hash
 
     # Persistimos en SQLite (tabla iahash_documents)
     store_iah_document(document)

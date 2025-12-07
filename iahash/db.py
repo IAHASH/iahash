@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
+import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+from iahash.crypto import normalize_text, sha256_hex
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "db" / "iahash.db"
@@ -111,6 +116,26 @@ def get_prompt_by_slug(slug: str) -> Optional[Dict[str, Any]]:
         conn.close()
 
 
+def get_prompt_by_id(prompt_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT id, slug, owner_id, title, description, full_prompt, category,
+                   is_master, visibility,
+                   h_public, h_secret, signature_prompt,
+                   created_at, updated_at
+            FROM prompts
+            WHERE id = ?
+            """,
+            (prompt_id,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def list_prompts() -> List[Dict[str, Any]]:
     conn = get_connection()
     try:
@@ -127,6 +152,145 @@ def list_prompts() -> List[Dict[str, Any]]:
         conn.close()
 
 
+def _compute_prompt_hashes(full_prompt: str, *, hmac_key: Optional[str]) -> Tuple[str, Optional[str]]:
+    normalized = normalize_text(full_prompt)
+    h_public = sha256_hex(normalized.encode("utf-8"))
+
+    h_secret: Optional[str] = None
+    if hmac_key:
+        h_secret = hmac.new(
+            hmac_key.encode("utf-8"), normalized.encode("utf-8"), "sha256"
+        ).hexdigest()
+    return h_public, h_secret
+
+
+def create_prompt(
+    *,
+    slug: str,
+    title: str,
+    full_prompt: str,
+    description: Optional[str] = None,
+    owner_id: Optional[str] = None,
+    category: Optional[str] = None,
+    is_master: bool = True,
+    visibility: str = "public",
+    signature_prompt: Optional[str] = None,
+    h_public: Optional[str] = None,
+    h_secret: Optional[str] = None,
+) -> int:
+    """
+    Inserta un prompt maestro e incluye sus hashes público y privado.
+    Devuelve el ID autoincremental creado.
+    """
+
+    hmac_key = os.getenv("IAHASH_PROMPT_HMAC_KEY")
+    computed_public, computed_secret = _compute_prompt_hashes(
+        full_prompt, hmac_key=hmac_key
+    )
+
+    final_h_public = h_public or computed_public
+    final_h_secret = h_secret or computed_secret
+
+    conn = get_connection()
+    try:
+        cols = _get_table_columns(conn, "prompts")
+        now = datetime.now(timezone.utc).isoformat()
+        data: Dict[str, Any] = {
+            "slug": slug,
+            "owner_id": owner_id,
+            "title": title,
+            "description": description,
+            "full_prompt": full_prompt,
+            "category": category,
+            "is_master": 1 if is_master else 0,
+            "visibility": visibility,
+            "h_public": final_h_public,
+            "h_secret": final_h_secret,
+            "signature_prompt": signature_prompt,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        filtered = {k: v for k, v in data.items() if k in cols}
+        col_names = ", ".join(filtered.keys())
+        placeholders = ", ".join(["?"] * len(filtered))
+        values = list(filtered.values())
+
+        conn.execute(
+            f"INSERT INTO prompts ({col_names}) VALUES ({placeholders})",
+            values,
+        )
+        conn.commit()
+        return int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+    finally:
+        conn.close()
+
+
+def update_prompt(
+    prompt_id: int,
+    *,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    full_prompt: Optional[str] = None,
+    category: Optional[str] = None,
+    visibility: Optional[str] = None,
+    signature_prompt: Optional[str] = None,
+    h_public: Optional[str] = None,
+    h_secret: Optional[str] = None,
+) -> None:
+    """Actualiza un prompt maestro, recalculando hashes si cambia el texto."""
+
+    existing = get_prompt_by_id(prompt_id)
+    if not existing:
+        raise ValueError(f"Prompt with id {prompt_id} not found")
+
+    prompt_text = full_prompt if full_prompt is not None else existing.get("full_prompt", "")
+    hmac_key = os.getenv("IAHASH_PROMPT_HMAC_KEY")
+    computed_public, computed_secret = _compute_prompt_hashes(
+        prompt_text, hmac_key=hmac_key
+    )
+
+    final_h_public = h_public or computed_public
+    final_h_secret = h_secret or computed_secret
+
+    conn = get_connection()
+    try:
+        cols = _get_table_columns(conn, "prompts")
+        updates: Dict[str, Any] = {
+            "title": title if title is not None else existing.get("title"),
+            "description": description if description is not None else existing.get("description"),
+            "full_prompt": prompt_text,
+            "category": category if category is not None else existing.get("category"),
+            "visibility": visibility if visibility is not None else existing.get("visibility"),
+            "signature_prompt": signature_prompt
+            if signature_prompt is not None
+            else existing.get("signature_prompt"),
+            "h_public": final_h_public,
+            "h_secret": final_h_secret,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        filtered = {k: v for k, v in updates.items() if k in cols}
+        assignments = ", ".join([f"{k} = ?" for k in filtered.keys()])
+
+        conn.execute(
+            f"UPDATE prompts SET {assignments} WHERE id = ?",
+            [*filtered.values(), prompt_id],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_prompt(prompt_id: int) -> None:
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM prompts WHERE id = ?", (prompt_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # IA-HASH DOCUMENTS
 # ---------------------------------------------------------------------------
@@ -137,7 +301,14 @@ def _get_table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     Útil para hacer inserts tolerantes a cambios de schema.
     """
     cur = conn.execute(f"PRAGMA table_info({table})")
-    return {row["name"] for row in cur.fetchall()}
+    columns = set()
+    for row in cur.fetchall():
+        try:
+            columns.add(row["name"])
+        except Exception:
+            # Fallback para conexiones sin row_factory
+            columns.add(row[1])
+    return columns
 
 
 def _apply_schema(conn: sqlite3.Connection, *, bootstrap: bool) -> None:
@@ -149,6 +320,12 @@ def _apply_schema(conn: sqlite3.Connection, *, bootstrap: bool) -> None:
         return
 
     # Actualizaciones mínimas para entornos con schema antiguo
+    prompt_cols = _get_table_columns(conn, "prompts")
+    if "h_public" not in prompt_cols:
+        conn.execute("ALTER TABLE prompts ADD COLUMN h_public TEXT")
+    if "h_secret" not in prompt_cols:
+        conn.execute("ALTER TABLE prompts ADD COLUMN h_secret TEXT")
+
     cols = _get_table_columns(conn, "iahash_documents")
     if "raw_context_text" not in cols:
         conn.execute("ALTER TABLE iahash_documents ADD COLUMN raw_context_text TEXT")
@@ -178,8 +355,8 @@ def _load_seed_data(conn: sqlite3.Connection) -> None:
         cur = conn.execute("SELECT COUNT(*) FROM prompts")
         prompt_count = cur.fetchone()[0]
     except sqlite3.Error:
-        logger.warning("Unable to count prompts; skipping seed data load")
-        return
+        logger.warning("Unable to count prompts; attempting to load seed data anyway")
+        prompt_count = 0
 
     if prompt_count:
         return
