@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import hmac
+import os
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -11,13 +11,13 @@ import httpx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from iahash.crypto import normalize_text, sha256_hex, verify_signature
 from iahash.config import ISSUER_ID, ISSUER_PK_URL
-from iahash.issuer import PROTOCOL_VERSION, build_total_hash_string
+from iahash.crypto import normalize_text, sha256_hex, verify_signature
 from iahash.extractors.chatgpt_share import extract_chatgpt_share
 from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
+from iahash.issuer import PROTOCOL_VERSION, build_total_hash_string
 
-
+# Cache simple en memoria para claves públicas
 _PUBLIC_KEY_CACHE: Dict[str, Ed25519PublicKey] = {}
 
 
@@ -45,7 +45,10 @@ def load_remote_public_key(
     if not url:
         raise ValueError("issuer_pk_url is required")
 
-    cache_store = key_cache if key_cache is not None else (_PUBLIC_KEY_CACHE if use_cache else None)
+    cache_store = key_cache if key_cache is not None else (
+        _PUBLIC_KEY_CACHE if use_cache else None
+    )
+
     if cache_store is not None and url in cache_store:
         return cache_store[url]
 
@@ -53,13 +56,17 @@ def load_remote_public_key(
         response = httpx.get(url, timeout=timeout)
         response.raise_for_status()
     except httpx.TimeoutException as exc:
-        raise TimeoutError(f"Timeout fetching issuer public key from {url}") from exc
+        raise TimeoutError(
+            f"Timeout fetching issuer public key from {url}"
+        ) from exc
     except httpx.HTTPStatusError as exc:
         raise ConnectionError(
             f"Failed to fetch issuer public key from {url}: {exc.response.status_code}"
         ) from exc
     except httpx.RequestError as exc:
-        raise ConnectionError(f"Unable to fetch issuer public key from {url}: {exc}") from exc
+        raise ConnectionError(
+            f"Unable to fetch issuer public key from {url}: {exc}"
+        ) from exc
 
     data = response.content
     public_key = serialization.load_pem_public_key(data)
@@ -81,18 +88,26 @@ def verify_document(
     Verifica un documento IA-HASH completo.
 
     Pasos:
-      1. Descargar clave pública del issuer (issuer_pk_url).
-      2. Verificar firma Ed25519 sobre h_total.
-      3. Recalcular hashes de prompt/respuesta si hay raw_text.
-      4. Recalcular h_total a partir de h_prompt/h_response/model/timestamp.
-      5. Devolver estado + flags de validez y lista de errores.
+    1. Descargar clave pública del issuer (issuer_pk_url).
+    2. Verificar firma Ed25519 sobre h_total.
+    3. Recalcular hashes de prompt/respuesta si hay raw_text o se puede
+       extraer desde provider (chatgpt.com/share/...).
+    4. Recalcular h_total a partir de h_prompt/h_response/model/timestamp.
+    5. Verificación opcional de HMAC del prompt maestro.
+    6. Devolver estado + flags de validez y lista de errores.
     """
     errors: List[str] = []
-    status = VerificationStatus.MALFORMED_DOCUMENT
+    status: VerificationStatus = VerificationStatus.MALFORMED_DOCUMENT
     differences: Optional[Dict[str, Any]] = None
     status_detail: Optional[str] = None
+    resolved_issuer_pk_url: Optional[str] = None
+    normalized_prompt_text: Optional[str] = None
+    normalized_response_text: Optional[str] = None
 
     def _fail(status_value: VerificationStatus, error_message: str) -> Dict[str, Any]:
+        """
+        Devuelve una respuesta de verificación fallida con estructura consistente.
+        """
         return {
             "valid": False,
             "status": status_value.value,
@@ -102,40 +117,51 @@ def verify_document(
             "prompt_match": False,
             "prompt_hmac_valid": False,
             "errors": [error_message],
+            "normalized_prompt_text": None,
+            "normalized_response_text": None,
+            "differences": None,
             "resolved_issuer_pk_url": None,
         }
 
-issuer_id = document.get("issuer_id")
-issuer_pk_url = document.get("issuer_pk_url")
+    issuer_id = document.get("issuer_id")
+    issuer_pk_url = document.get("issuer_pk_url")
 
-if not issuer_pk_url:
-    # Compatibilidad con documentos locales antiguos
-    if issuer_id and issuer_id == ISSUER_ID:
-        issuer_pk_url = ISSUER_PK_URL
-    else:
-        status = VerificationStatus.MALFORMED_DOCUMENT
-        status_detail = "MISSING_ISSUER_PK_URL"
-        return _fail(
-            status,
-            "Missing issuer_pk_url and issuer_id does not match local issuer",
-        )
+    # Compatibilidad con documentos locales antiguos: si falta issuer_pk_url
+    # pero el issuer_id coincide con el local, usamos ISSUER_PK_URL.
+    if not issuer_pk_url:
+        if issuer_id and issuer_id == ISSUER_ID:
+            issuer_pk_url = ISSUER_PK_URL
+        else:
+            status = VerificationStatus.MALFORMED_DOCUMENT
+            status_detail = "MISSING_ISSUER_PK_URL"
+            return _fail(
+                status,
+                "Missing issuer_pk_url and issuer_id does not match local issuer",
+            )
 
+    resolved_issuer_pk_url = issuer_pk_url
 
-    # 1) Cargar clave pública
+    # 1) Cargar clave pública del issuer
     try:
         public_key = load_remote_public_key(
-            issuer_pk_url, timeout=timeout, use_cache=use_cache, key_cache=key_cache
+            issuer_pk_url,
+            timeout=timeout,
+            use_cache=use_cache,
+            key_cache=key_cache,
         )
     except (ValueError, TimeoutError, ConnectionError) as exc:
         status = VerificationStatus.UNREACHABLE_ISSUER
+        status_detail = "ISSUER_PK_FETCH_ERROR"
         return _fail(status, str(exc))
-    except Exception as exc:  # pragma: no cover - fallback para errores inesperados
+    except Exception as exc:  # pragma: no cover - fallback defensivo
         status = VerificationStatus.UNREACHABLE_ISSUER
+        status_detail = "ISSUER_PK_UNKNOWN_ERROR"
         return _fail(status, f"Unable to fetch public key: {exc}")
 
-    # 2) Resolver textos del prompt/respuesta
+    # 2) Resolver textos del prompt/respuesta (provider + conversation_url)
     provider = (document.get("provider") or "").lower()
     conversation_url = document.get("conversation_url")
+
     fetched_prompt: Optional[str] = None
     fetched_response: Optional[str] = None
     fetched_model: Optional[str] = None
@@ -143,47 +169,54 @@ if not issuer_pk_url:
     if conversation_url and provider:
         if provider not in SUPPORTED_PROVIDERS:
             status = VerificationStatus.UNSUPPORTED_PROVIDER
+            status_detail = "UNSUPPORTED_PROVIDER"
             return _fail(status, f"Provider not supported: {provider}")
 
         try:
             extracted = extract_chatgpt_share(conversation_url)
         except UnreachableSource as exc:
             status = VerificationStatus.UNREACHABLE_ISSUER
+            status_detail = "CONVERSATION_UNREACHABLE"
             return _fail(status, f"Conversation URL unreachable: {exc}")
         except UnsupportedProvider as exc:
             status = VerificationStatus.UNSUPPORTED_PROVIDER
+            status_detail = "UNSUPPORTED_PROVIDER"
             return _fail(status, str(exc))
         except Exception as exc:  # pragma: no cover - extractor defensivo
             status = VerificationStatus.UNREACHABLE_ISSUER
+            status_detail = "CONVERSATION_UNKNOWN_ERROR"
             return _fail(status, f"Unable to fetch conversation: {exc}")
 
         fetched_prompt = extracted.get("prompt_text")
         fetched_response = extracted.get("response_text")
         fetched_model = extracted.get("model")
 
-    raw_prompt = fetched_prompt if fetched_prompt is not None else document.get("raw_prompt_text")
+    # Preferimos los textos extraídos; si no hay, caemos al raw_* del documento.
+    raw_prompt = fetched_prompt if fetched_prompt is not None else document.get(
+        "raw_prompt_text"
+    )
     raw_response = (
-        fetched_response if fetched_response is not None else document.get("raw_response_text")
-        )
-
-    resolved_issuer_pk_url = issuer_pk_url
-
-    normalized_prompt_text: Optional[str] = None
-    normalized_response_text: Optional[str] = None
+        fetched_response
+        if fetched_response is not None
+        else document.get("raw_response_text")
+    )
 
     h_prompt_expected = document.get("h_prompt")
     h_response_expected = document.get("h_response")
 
     # 3) Verificar firma sobre h_total provisto
-    signature_hex = document.get("signature", "")
+    signature_hex = document.get("signature", "") or ""
     try:
         signature_bytes = bytes.fromhex(signature_hex)
     except ValueError:
         signature_bytes = b""
 
     signature_valid = verify_signature(
-        document.get("h_total", "").encode("utf-8"), signature_bytes, public_key
+        (document.get("h_total") or "").encode("utf-8"),
+        signature_bytes,
+        public_key,
     )
+
     if not signature_valid:
         errors.append("Signature verification failed")
 
@@ -201,7 +234,9 @@ if not issuer_pk_url:
 
     if raw_response is not None:
         normalized_response_text = normalize_text(raw_response)
-        recomputed_response_hash = sha256_hex(normalized_response_text.encode("utf-8"))
+        recomputed_response_hash = sha256_hex(
+            normalized_response_text.encode("utf-8")
+        )
         if recomputed_response_hash != h_response_expected:
             prompt_match = False
             errors.append("Response hash mismatch")
@@ -221,6 +256,7 @@ if not issuer_pk_url:
             document.get("timestamp", ""),
         ).encode("utf-8")
     )
+
     hash_valid = h_total_recomputed == document.get("h_total")
     if not hash_valid:
         errors.append("h_total mismatch")
@@ -229,6 +265,7 @@ if not issuer_pk_url:
     prompt_hmac_valid = True
     prompt_hmac = document.get("prompt_hmac")
     prompt_hmac_key = os.getenv("IAHASH_PROMPT_HMAC_KEY")
+
     if prompt_hmac and prompt_hmac_key and raw_prompt is not None:
         computed_hmac = hmac.new(
             prompt_hmac_key.encode("utf-8"),
@@ -242,21 +279,30 @@ if not issuer_pk_url:
     # 7) Determinar estado final
     if signature_valid and hash_valid and prompt_match and prompt_hmac_valid:
         status = VerificationStatus.VERIFIED
+        status_detail = None
     elif not prompt_match or not prompt_hmac_valid:
         status = VerificationStatus.INVALID_SIGNATURE
         status_detail = "CONTENT_MISMATCH"
     elif not signature_valid or not hash_valid:
         status = VerificationStatus.INVALID_SIGNATURE
-        status_detail = "SIGNATURE_MISMATCH" if not signature_valid else "HASH_MISMATCH"
+        status_detail = (
+            "SIGNATURE_MISMATCH" if not signature_valid else "HASH_MISMATCH"
+        )
 
+    # 8) Construir diferencias si hay inconsistencias
     if status == VerificationStatus.INVALID_SIGNATURE:
         differences = {"hashes": {}, "fields": {}}  # type: ignore[assignment]
 
-        def add_diff(category: str, key: str, expected: Any, computed: Any) -> None:
+        def add_diff(
+            category: str,
+            key: str,
+            expected: Any,
+            computed: Any,
+        ) -> None:
             if expected is None and computed is None:
                 return
-            differences_category = differences.setdefault(category, {})  # type: ignore[assignment]
-            differences_category[key] = {"expected": expected, "computed": computed}
+            category_dict = differences.setdefault(category, {})  # type: ignore[assignment]
+            category_dict[key] = {"expected": expected, "computed": computed}
 
         add_diff("hashes", "h_prompt", h_prompt_expected, recomputed_prompt_hash)
         add_diff("hashes", "h_response", h_response_expected, recomputed_response_hash)
@@ -279,6 +325,7 @@ if not issuer_pk_url:
             bool(document.get("prompt_hmac")) if prompt_hmac else None,
             prompt_hmac_valid if prompt_hmac else None,
         )
+
         differences["inputs_for_total"] = {
             "protocol_version": document.get("protocol_version", PROTOCOL_VERSION),
             "prompt_id": document.get("prompt_id"),
