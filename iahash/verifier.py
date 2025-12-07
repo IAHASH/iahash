@@ -121,10 +121,14 @@ def verify_document(
         }
 
     # 2) Verificar firma
+    signature_hex = document.get("signature", "")
+    try:
+        signature_bytes = bytes.fromhex(signature_hex)
+    except ValueError:
+        signature_bytes = b""
+
     signature_valid = verify_signature(
-        document["h_total"].encode("utf-8"),
-        document.get("signature", ""),
-        public_key,
+        document["h_total"].encode("utf-8"), signature_bytes, public_key
     )
     if not signature_valid:
         status = VerificationStatus.INVALID_SIGNATURE
