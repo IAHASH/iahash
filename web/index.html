@@ -164,6 +164,8 @@
               <div id="verify-extra" class="result-hint"></div>
             </div>
 
+            <div id="verify-hash-result"></div>
+
             <div id="verify-seal" style="display:none; margin-top:8px;">
               <img
                 src="/static/badge-verified.svg"
@@ -174,6 +176,47 @@
           </div>
         </section>
       </div>
+
+      <section id="prompt-url" class="card card-side">
+        <div class="card-info">
+          <h2 class="card-title">Verificar respuesta (ChatGPT link)</h2>
+          <p class="card-description">
+            Pega la URL compartida de ChatGPT y generaremos el IA-HASH completo para el prompt maestro.
+          </p>
+        </div>
+
+        <div class="form">
+          <div class="field-group">
+            <label class="field-label" for="prompt-url-id">Prompt ID</label>
+            <input id="prompt-url-id" class="field-input" value="cv-honesto-v1" />
+          </div>
+
+          <div class="field-grid">
+            <div class="field-group">
+              <label class="field-label" for="prompt-url-provider">Proveedor</label>
+              <select id="prompt-url-provider" class="field-input">
+                <option value="chatgpt">ChatGPT</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="prompt-url-share">ChatGPT share URL</label>
+              <input
+                id="prompt-url-share"
+                class="field-input"
+                placeholder="https://chatgpt.com/share/…"
+                type="url"
+              />
+            </div>
+          </div>
+
+          <div class="form-footer">
+            <button id="btn-verify-url" class="btn btn-primary" type="button">Verificar con IA-HASH</button>
+            <span id="prompt-url-status" class="form-status">Pega el enlace compartido y pulsa verificar.</span>
+          </div>
+
+          <div id="prompt-url-result"></div>
+        </div>
+      </section>
 
       <!-- CÓMO FUNCIONA -->
       <section id="how" class="card card-info">
@@ -215,6 +258,7 @@
       <span>Repositorio: <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">github.com/IAHASH/iahash</a></span>
     </footer>
 
+    <script src="/static/shared.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
 
@@ -229,6 +273,10 @@
       const verifyHintEl = $("verify-hint");
       const verifyExtraEl = $("verify-extra");
       const verifySealEl = $("verify-seal");
+      const verifyHashResultEl = $("verify-hash-result");
+
+      const promptUrlStatusEl = $("prompt-url-status");
+      const promptUrlResultEl = $("prompt-url-result");
 
       let lastIssued = null;
 
@@ -301,6 +349,7 @@
         verifyBadgeEl.className = "badge";
         verifyBadgeEl.textContent = "Verificando";
         verifyStatusEl.textContent = "Verificando documento…";
+        renderIAHashResult(verifyHashResultEl, null, {});
 
         let doc;
         try {
@@ -309,6 +358,7 @@
           verifyStatusEl.textContent = "JSON inválido. Revisa el formato.";
           verifyBadgeEl.className = "badge badge-error";
           verifyBadgeEl.textContent = "Error";
+          renderError(verifyHashResultEl, "JSON inválido. Revisa el formato.");
           return;
         }
 
@@ -322,9 +372,15 @@
             verifyStatusEl.textContent = "Error al verificar (HTTP " + res.status + ").";
             verifyBadgeEl.className = "badge badge-error";
             verifyBadgeEl.textContent = "Error";
+            renderError(verifyHashResultEl, "Error al verificar: " + res.status);
             return;
           }
           const data = await res.json();
+          renderIAHashResult(verifyHashResultEl, doc, {
+            valid: data.valid,
+            error: data.valid ? null : data.reason,
+          });
+
           if (data.valid) {
             verifyBadgeEl.className = "badge badge-success";
             verifyBadgeEl.textContent = "Válido";
@@ -344,6 +400,55 @@
           verifyStatusEl.textContent = "Error de red al contactar con la API.";
           verifyBadgeEl.className = "badge badge-error";
           verifyBadgeEl.textContent = "Error";
+          renderError(verifyHashResultEl, "No se pudo contactar con la API de verificación.");
+        }
+      });
+
+      $("btn-verify-url").addEventListener("click", async () => {
+        const btn = $("btn-verify-url");
+        const promptId = $("prompt-url-id").value.trim();
+        const provider = $("prompt-url-provider").value;
+        const shareUrl = $("prompt-url-share").value.trim();
+
+        promptUrlStatusEl.textContent = "Llamando a IA-HASH…";
+        btn.disabled = true;
+        renderIAHashResult(promptUrlResultEl, null, {});
+
+        if (!shareUrl) {
+          promptUrlStatusEl.textContent = "Pega una URL de chatgpt.com/share.";
+          btn.disabled = false;
+          renderError(promptUrlResultEl, "Debes pegar una URL válida de ChatGPT.");
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/verify/prompt_url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt_id: promptId, provider, share_url: shareUrl }),
+          });
+
+          if (!res.ok) {
+            const detail = await res.text();
+            promptUrlStatusEl.textContent = "No se pudo verificar el enlace.";
+            renderError(promptUrlResultEl, detail || "Error de verificación");
+            return;
+          }
+
+          const data = await res.json();
+          promptUrlStatusEl.textContent = data.valid
+            ? "IA-HASH generado y verificado a partir del enlace."
+            : data.reason || "No verificado";
+
+          renderIAHashResult(promptUrlResultEl, data.document, {
+            valid: data.valid,
+            error: data.valid ? null : data.reason,
+          });
+        } catch (err) {
+          promptUrlStatusEl.textContent = "Error de red al contactar con la API.";
+          renderError(promptUrlResultEl, "No se pudo recuperar la conversación compartida.");
+        } finally {
+          btn.disabled = false;
         }
       });
     </script>
