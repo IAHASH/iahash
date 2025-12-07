@@ -58,3 +58,5 @@ def test_verifier_detects_tampering(monkeypatch, temp_keys):
     assert result["valid"] is False
     assert result["status"] == VerificationStatus.PROMPT_MISMATCH
     assert any("Prompt" in error or "prompt" in error for error in result["errors"])
+    assert result.get("normalized_prompt_text")
+    assert result.get("differences", {}).get("hashes", {}).get("h_prompt")

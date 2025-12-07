@@ -120,3 +120,27 @@ def test_verifier_reuses_cache(monkeypatch, public_key_bytes):
     assert call_counter["count"] == 1
     assert first["valid"] is True
     assert second["valid"] is True
+
+
+def test_hash_mismatch_reports_differences(monkeypatch, public_key_bytes):
+    def fake_get(url, timeout=None):
+        return httpx.Response(200, request=httpx.Request("GET", url), content=public_key_bytes)
+
+    monkeypatch.setattr("iahash.verifier.httpx.get", fake_get)
+    monkeypatch.setattr("iahash.verifier.verify_signature", lambda *args, **kwargs: True)
+
+    doc = issue_pair(
+        prompt_text="Hola IA",
+        response_text="Respuesta estable",
+        model="gpt-x",
+        issuer_pk_url="http://issuer.test/pubkey.pem",
+        store_raw=True,
+    )
+
+    tampered = {**doc, "h_total": "0" * 64}
+
+    result = verify_document(tampered)
+
+    assert result["status"] == VerificationStatus.HASH_MISMATCH
+    assert result["differences"]["hashes"]["h_total"]["expected"] == "0" * 64
+    assert result["differences"]["hashes"]["h_total"]["computed"] != "0" * 64

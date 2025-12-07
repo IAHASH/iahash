@@ -150,6 +150,23 @@
       <summary>Ver JSON completo</summary>
       <pre id="result-raw" class="result-raw muted">(sin datos)</pre>
     </details>
+    <div class="result-meta-grid">
+      <div class="result-errors" id="result-errors" style="display:none;">
+        <h4>Errores</h4>
+        <ul id="error-list"></ul>
+      </div>
+      <div class="result-normalized" id="normalized-container" style="display:none;">
+        <h4>Texto normalizado (store_raw)</h4>
+        <div class="normalized-row">
+          <p class="muted label">Prompt</p>
+          <pre id="normalized-prompt" class="result-raw"></pre>
+        </div>
+        <div class="normalized-row">
+          <p class="muted label">Respuesta</p>
+          <pre id="normalized-response" class="result-raw"></pre>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="/static/js/verify.js"></script>

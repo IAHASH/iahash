@@ -89,6 +89,7 @@ def verify_document(
     """
     errors: List[str] = []
     status = VerificationStatus.UNKNOWN
+    differences: Optional[Dict[str, Any]] = None
 
     def _fail(status_value: str, error_message: str) -> Dict[str, Any]:
         return {
@@ -151,6 +152,9 @@ def verify_document(
         fetched_response if fetched_response is not None else document.get("raw_response_text")
     )
 
+    normalized_prompt_text: Optional[str] = None
+    normalized_response_text: Optional[str] = None
+
     h_prompt_expected = document.get("h_prompt")
     h_response_expected = document.get("h_response")
 
@@ -173,13 +177,15 @@ def verify_document(
     recomputed_response_hash: Optional[str] = None
 
     if raw_prompt is not None:
-        recomputed_prompt_hash = sha256_hex(normalize_text(raw_prompt).encode("utf-8"))
+        normalized_prompt_text = normalize_text(raw_prompt)
+        recomputed_prompt_hash = sha256_hex(normalized_prompt_text.encode("utf-8"))
         if recomputed_prompt_hash != h_prompt_expected:
             prompt_match = False
             errors.append("Prompt hash mismatch")
 
     if raw_response is not None:
-        recomputed_response_hash = sha256_hex(normalize_text(raw_response).encode("utf-8"))
+        normalized_response_text = normalize_text(raw_response)
+        recomputed_response_hash = sha256_hex(normalized_response_text.encode("utf-8"))
         if recomputed_response_hash != h_response_expected:
             prompt_match = False
             errors.append("Response hash mismatch")
@@ -227,6 +233,45 @@ def verify_document(
     elif not hash_valid:
         status = VerificationStatus.HASH_MISMATCH
 
+    if status in {VerificationStatus.HASH_MISMATCH, VerificationStatus.PROMPT_MISMATCH}:
+        differences = {"hashes": {}, "fields": {}}  # type: ignore[assignment]
+
+        def add_diff(category: str, key: str, expected: Any, computed: Any) -> None:
+            if expected is None and computed is None:
+                return
+            differences_category = differences.setdefault(category, {})  # type: ignore[assignment]
+            differences_category[key] = {"expected": expected, "computed": computed}
+
+        add_diff("hashes", "h_prompt", h_prompt_expected, recomputed_prompt_hash)
+        add_diff("hashes", "h_response", h_response_expected, recomputed_response_hash)
+        add_diff("hashes", "h_total", document.get("h_total"), h_total_recomputed)
+
+        expected_model = document.get("model", "unknown")
+        add_diff("fields", "model", expected_model, model_value)
+        add_diff("fields", "timestamp", document.get("timestamp"), document.get("timestamp"))
+        add_diff("fields", "prompt_id", document.get("prompt_id"), document.get("prompt_id"))
+        add_diff("fields", "provider", document.get("provider"), document.get("provider"))
+        add_diff(
+            "fields",
+            "prompt_hmac",
+            document.get("prompt_hmac"),
+            document.get("prompt_hmac"),
+        )
+        add_diff(
+            "fields",
+            "prompt_hmac_valid",
+            bool(document.get("prompt_hmac")) if prompt_hmac else None,
+            prompt_hmac_valid if prompt_hmac else None,
+        )
+        differences["inputs_for_total"] = {
+            "protocol_version": document.get("protocol_version", PROTOCOL_VERSION),
+            "prompt_id": document.get("prompt_id"),
+            "h_prompt": final_h_prompt,
+            "h_response": final_h_response,
+            "model": model_value,
+            "timestamp": document.get("timestamp", ""),
+        }
+
     return {
         "valid": status == VerificationStatus.VALID,
         "status": status,
@@ -235,4 +280,7 @@ def verify_document(
         "prompt_match": prompt_match,
         "prompt_hmac_valid": prompt_hmac_valid,
         "errors": errors,
+        "normalized_prompt_text": normalized_prompt_text,
+        "normalized_response_text": normalized_response_text,
+        "differences": differences,
     }

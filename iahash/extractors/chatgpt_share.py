@@ -14,7 +14,17 @@ from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
 CHATGPT_SHARE_HOSTS = {"chat.openai.com", "chatgpt.com"}
 SHARE_PATH_FRAGMENT = "/share/"
 
-__all__ = ["extract_from_url", "extract_chatgpt_share"]
+ERROR_UNREACHABLE = "unreachable"
+ERROR_PARSING = "parsing"
+ERROR_UNSUPPORTED = "unsupported"
+
+__all__ = [
+    "extract_from_url",
+    "extract_chatgpt_share",
+    "ERROR_UNREACHABLE",
+    "ERROR_PARSING",
+    "ERROR_UNSUPPORTED",
+]
 
 
 def _validate_share_url(url: str) -> None:
