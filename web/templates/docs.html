@@ -1,13 +1,118 @@
 {% extends "base.html" %}
 {% block content %}
-  <div class="section">
-    <h2>Documentation</h2>
-    <p class="muted">Protocolo y arquitectura oficiales IA-HASH v1.2.</p>
-    <div class="flex">
-      <a class="button secondary" href="/docs/PROTOCOL_1.2.md">PROTOCOL_1.2.md</a>
-      <a class="button secondary" href="/docs/ARCHITECTURE_1.2.md">ARCHITECTURE_1.2.md</a>
+  <div class="section doc-hero">
+    <div>
+      <p class="pill">IA-HASH v1.2 · Docs Hub</p>
+      <h2>Documentación centralizada</h2>
+      <p class="muted">
+        Protocolos, API y guías rápidas para emitir y verificar documentos IA-HASH.
+        Diseñado para desarrolladores, auditores y equipos de seguridad.
+      </p>
+      <div class="button-row">
+        <a class="button secondary" href="/docs/PROTOCOL_1.2.md">Protocolo v1.2 (PDF)</a>
+        <a class="button secondary" href="/docs/ARCHITECTURE_1.2.md">Arquitectura</a>
+        <a class="button secondary" href="/docs/api.md">API REST</a>
+        <a class="button secondary" href="/docs/integration-examples.md">Integraciones</a>
+      </div>
+    </div>
+    <div class="doc-checklist">
+      <h3>Checklist rápido</h3>
+      <ul>
+        <li>Usa versión del protocolo &ge; 1.2</li>
+        <li>Incluye hashes normalizados y firma Ed25519</li>
+        <li>Distribuye la clave pública en <code>/keys/issuer_ed25519.pub</code></li>
+        <li>Permite verificación offline + endpoint <code>/api/check</code></li>
+      </ul>
     </div>
   </div>
+
+  <div class="section">
+    <h3 id="quickstart">Guía rápida</h3>
+    <div class="doc-grid">
+      <div class="doc-card">
+        <h4>Emitir</h4>
+        <p class="muted">Envía prompt + respuesta al endpoint seguro.</p>
+        <pre>{"prompt_text": "...", "response_text": "...", "model": "gpt-X"}</pre>
+        <div class="pill-row">
+          <span class="pill">POST /api/verify/pair</span>
+          <span class="pill">Firma Ed25519</span>
+        </div>
+      </div>
+      <div class="doc-card">
+        <h4>Verificar</h4>
+        <p class="muted">Comprueba hashes y firma con la clave pública.</p>
+        <pre>{"document": {"iah_id": "...", "h_total": "..."}}</pre>
+        <div class="pill-row">
+          <span class="pill">POST /api/check</span>
+          <span class="pill">Estado: valid / tampered</span>
+        </div>
+      </div>
+      <div class="doc-card">
+        <h4>Consumo web</h4>
+        <p class="muted">Usa el verificador embebido o carga JSON firmado.</p>
+        <ul class="muted doc-list">
+          <li>Verificador en <strong>/</strong> → sección "Verificar documento"</li>
+          <li>Menú rápido: Docs Hub + CTA "Emitir IA-HASH"</li>
+          <li>Descarga del artefacto directamente desde el panel</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3 id="api">API y endpoints</h3>
+    <div class="doc-grid two-cols">
+      <div class="doc-card">
+        <h4>Generación</h4>
+        <p class="muted">Endpoints para emitir documentos verificables.</p>
+        <ul class="doc-list">
+          <li><code>POST /api/verify/pair</code> · prompt + respuesta</li>
+          <li><code>POST /api/verify/conversation</code> · URL de conversación</li>
+          <li><code>GET /prompts</code> · prompts base con HMAC opcional</li>
+        </ul>
+      </div>
+      <div class="doc-card">
+        <h4>Verificación</h4>
+        <p class="muted">Para comprobar autenticidad y obtener metadatos.</p>
+        <ul class="doc-list">
+          <li><code>POST /api/check</code> · valid / tampered / invalid</li>
+          <li><code>GET /iah/{id}</code> · documento público (sin raw)</li>
+          <li><code>GET /public-key</code> · clave en JSON</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3 id="resources">Recursos extendidos</h3>
+    <div class="doc-grid">
+      <div class="doc-card">
+        <h4>Roadmap + visión</h4>
+        <p class="muted">Próximas features y principio de neutralidad.</p>
+        <a class="button secondary" href="/docs/ROADMAP.md">Ver roadmap</a>
+      </div>
+      <div class="doc-card">
+        <h4>Maestro del proyecto</h4>
+        <p class="muted">Documento narrativo que resume IA-HASH y sus flujos.</p>
+        <a class="button secondary" href="/docs/MASTER.md">Abrir MASTER.md</a>
+      </div>
+      <div class="doc-card">
+        <h4>Prompts de referencia</h4>
+        <p class="muted">Listado curado de prompts y secuencias verificables.</p>
+        <a class="button secondary" href="/prompts">Explorar prompts</a>
+      </div>
+      <div class="doc-card">
+        <h4>Claves y políticas</h4>
+        <p class="muted">Ubicación, rotación y distribución de claves públicas.</p>
+        <ul class="doc-list muted">
+          <li>Claves en <code>/data/keys/</code></li>
+          <li>Distribuye <code>issuer_ed25519.pub</code></li>
+          <li>Verificación offline garantizada</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   {% if iah %}
     <div class="card">
       <h3>IA-HASH {{ iah['iah_id'] }}</h3>
