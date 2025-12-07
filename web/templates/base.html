@@ -1,35 +1,64 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IA-HASH v1.2</title>
-  <link rel="stylesheet" href="/static/styles.css">
-</head>
-<body>
-  <header>
-    <div class="navbar">
-      <a class="logo" href="/">
-        <img src="/static/logo.png" alt="IA-HASH logo">
-        <span>IA-HASH</span>
-      </a>
-      <nav class="nav-links">
-        <a href="/">Home</a>
-        <a href="/prompts">Prompts</a>
-        <a href="/sequences">Sequences</a>
-        <a href="/compare">Compare</a>
-        <a href="/verify">Verify</a>
-        <a class="nav-strong" href="/docs">Docs Hub</a>
-        <a href="/account">Account</a>
-        <a class="nav-cta" href="/#issue-from-text">Emitir IA-HASH</a>
-      </nav>
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <title>{% block title %}IA-HASH{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="page">
+      <div class="wrap">
+        <!-- Header / navegación -->
+        <header class="page-header">
+          <div class="header-inner">
+            <a href="/" class="nav-logo">
+              <img src="/static/logo.png" alt="IA-HASH">
+              <div>
+                <div class="site-title">IA-HASH</div>
+                <div class="site-tagline">Hashes verificables para prompts IA</div>
+              </div>
+            </a>
+
+            <nav class="nav">
+              <div class="nav-links">
+                <a href="/" class="{% if request.url.path == '/' %}nav-strong{% endif %}">
+                  Inicio
+                </a>
+                <a href="/verify" class="{% if request.url.path.startswith('/verify') %}nav-strong{% endif %}">
+                  Verificar
+                </a>
+                <a href="/prompts" class="{% if request.url.path.startswith('/prompts') %}nav-strong{% endif %}">
+                  Prompts
+                </a>
+                <a href="/sequences" class="{% if request.url.path.startswith('/sequences') %}nav-strong{% endif %}">
+                  Secuencias
+                </a>
+                <a href="/docs" class="{% if request.url.path.startswith('/docs') %}nav-strong{% endif %}">
+                  Docs
+                </a>
+                <a href="/account" class="nav-cta">
+                  Cuenta
+                </a>
+              </div>
+            </nav>
+          </div>
+        </header>
+
+        <!-- Contenido principal -->
+        <main>
+          {% block content %}{% endblock %}
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+          <div class="footer-meta">
+            <span>IA-HASH v1.2</span>
+            <span>·</span>
+            <span>Open protocol for verifiable IA outputs</span>
+          </div>
+        </footer>
+      </div>
     </div>
-  </header>
-  <main>
-    {% block content %}{% endblock %}
-  </main>
-  <div class="footer">
-    IA-HASH v1.2 · Deterministic trust for AI outputs.
-  </div>
-</body>
+  </body>
 </html>
