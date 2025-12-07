@@ -105,18 +105,21 @@ def verify_document(
             "resolved_issuer_pk_url": None,
         }
 
-    issuer_id = document.get("issuer_id")
-    issuer_pk_url = document.get("issuer_pk_url")
-    if not issuer_pk_url:
-        if issuer_id and issuer_id == ISSUER_ID:
-            issuer_pk_url = ISSUER_PK_URL
-        else:
-            status = VerificationStatus.MALFORMED_DOCUMENT
-            status_detail = "MISSING_ISSUER_PK_URL"
-            return _fail(
-                status,
-                "Missing issuer_pk_url and issuer_id does not match local issuer",
-            )
+issuer_id = document.get("issuer_id")
+issuer_pk_url = document.get("issuer_pk_url")
+
+if not issuer_pk_url:
+    # Compatibilidad con documentos locales antiguos
+    if issuer_id and issuer_id == ISSUER_ID:
+        issuer_pk_url = ISSUER_PK_URL
+    else:
+        status = VerificationStatus.MALFORMED_DOCUMENT
+        status_detail = "MISSING_ISSUER_PK_URL"
+        return _fail(
+            status,
+            "Missing issuer_pk_url and issuer_id does not match local issuer",
+        )
+
 
     # 1) Cargar clave pública
     try:
