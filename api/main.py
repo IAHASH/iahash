@@ -14,6 +14,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from iahash.issuer import issue_pair, issue_conversation, PROTOCOL_VERSION
+from iahash.extractors import extract_chatgpt_share
+from iahash.extractors.chatgpt_share import (
+    ERROR_PARSING,
+    ERROR_UNREACHABLE,
+    ERROR_UNSUPPORTED,
+)
 from iahash.verifier import verify_document
 from iahash.db import (
     get_prompt_by_slug,
@@ -199,13 +205,34 @@ def api_verify_conversation(payload: ConversationIssueRequest) -> Dict[str, Any]
     """
     Genera un documento IA-HASH para una conversación verificada por URL.
     """
+    extracted = extract_chatgpt_share(payload.conversation_url)
+    if extracted.get("error"):
+        error = extracted["error"]
+        if error == ERROR_UNREACHABLE:
+            detail = "Conversation URL unreachable"
+        elif error == ERROR_UNSUPPORTED:
+            detail = "Unsupported conversation format"
+        elif error == ERROR_PARSING:
+            detail = "Unable to parse conversation content"
+        else:
+            detail = "Unknown extraction error"
+        raise HTTPException(status_code=400, detail=detail)
+
+    if (
+        extracted["prompt_text"] != payload.prompt_text
+        or extracted["response_text"] != payload.response_text
+    ):
+        raise HTTPException(
+            status_code=400, detail="Extracted conversation does not match payload"
+        )
+
     doc = issue_conversation(
-        prompt_text=payload.prompt_text,
-        response_text=payload.response_text,
+        prompt_text=extracted["prompt_text"],
+        response_text=extracted["response_text"],
         prompt_id=payload.prompt_id,
-        model=payload.model,
+        model=extracted.get("model") or payload.model,
         conversation_url=payload.conversation_url,
-        provider=payload.provider,
+        provider=extracted.get("provider") or payload.provider,
         issuer_id=payload.issuer_id,
         issuer_pk_url=payload.issuer_pk_url,
         subject_id=payload.subject_id,

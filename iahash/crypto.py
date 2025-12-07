@@ -40,14 +40,30 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 
 PROTOCOL_VERSION = "IAHASH-1.2"
 
+
+def get_key_dir() -> Path:
+    key_dir_env = os.getenv("IAHASH_KEY_DIR") or os.getenv("IAHASH_KEYS_DIR")
+    return Path(key_dir_env) if key_dir_env else Path("/data/keys")
+
+
+def get_default_private_key_path() -> Path:
+    override = os.getenv("IAHASH_PRIVATE_KEY_FILE")
+    if override:
+        return Path(override)
+    return get_key_dir() / "issuer_ed25519.private"
+
+
+def get_default_public_key_path() -> Path:
+    override = os.getenv("IAHASH_PUBLIC_KEY_FILE")
+    if override:
+        return Path(override)
+    return get_key_dir() / "issuer_ed25519.pub"
+
+
 # Directorio y paths por defecto (alineados con start.sh)
-KEY_DIR = Path(os.getenv("IAHASH_KEY_DIR", "/data/keys"))
-DEFAULT_PRIVATE_KEY_PATH = Path(
-    os.getenv("IAHASH_PRIVATE_KEY_FILE", KEY_DIR / "issuer_ed25519.private")
-)
-DEFAULT_PUBLIC_KEY_PATH = Path(
-    os.getenv("IAHASH_PUBLIC_KEY_FILE", KEY_DIR / "issuer_ed25519.pub")
-)
+KEY_DIR = get_key_dir()
+DEFAULT_PRIVATE_KEY_PATH = get_default_private_key_path()
+DEFAULT_PUBLIC_KEY_PATH = get_default_public_key_path()
 
 
 # ============================================================================
@@ -221,13 +237,13 @@ def load_issuer_private_key(path: Path | None = None) -> ed25519.Ed25519PrivateK
     Carga la clave privada del emisor desde disco usando el path por defecto
     (o uno explícito si se indica).
     """
-    key_path = path or DEFAULT_PRIVATE_KEY_PATH
+    key_path = path or get_default_private_key_path()
     return load_ed25519_private_key(key_path)
 
 
 def load_issuer_public_key(path: Path | None = None) -> ed25519.Ed25519PublicKey:
     """Carga la clave pública del emisor."""
-    key_path = path or DEFAULT_PUBLIC_KEY_PATH
+    key_path = path or get_default_public_key_path()
     return load_ed25519_public_key(key_path)
 
 
