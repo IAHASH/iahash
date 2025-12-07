@@ -1,161 +1,155 @@
-"""SQLite helpers for IA-HASH v1.2."""
+# iahash/db.py
+"""
+SQLite helpers for IA-HASH v1.2.
+
+- Usa la base de datos db/iahash.db (misma ruta que start.sh).
+- Expone store_iah_document(document) para que issuer.py persista los documentos.
+- Es tolerante a cambios futuros de schema: detecta dinámicamente las columnas
+  disponibles en iahash_documents y solo inserta las que existan.
+"""
 
 from __future__ import annotations
 
+import json
+import os
 import sqlite3
-import subprocess
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, Optional
 
+
+# ============================================================================
+# Paths & conexión
+# ============================================================================
+
+# BASE_DIR = raíz del proyecto (donde están api/, iahash/, db/, start.sh)
 BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = BASE_DIR / "db" / "iahash.db"
-SCHEMA_PATH = BASE_DIR / "db" / "schema.sql"
-SEED_PATH = BASE_DIR / "db" / "seed_prompts.sql"
+
+# Permite sobreescribir la ruta de la DB vía env si algún día lo necesitas
+DB_PATH = Path(os.getenv("IAHASH_DB_PATH", BASE_DIR / "db" / "iahash.db"))
 
 
-def ensure_db_initialized() -> None:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if DB_PATH.exists():
-        return
+def _get_connection() -> sqlite3.Connection:
+    """
+    Crea una nueva conexión SQLite.
 
-    if not SCHEMA_PATH.exists():
-        raise FileNotFoundError(f"Schema file missing: {SCHEMA_PATH}")
-
-    subprocess.run(["sqlite3", str(DB_PATH)], input=SCHEMA_PATH.read_bytes(), check=True)
-    if SEED_PATH.exists():
-        subprocess.run(["sqlite3", str(DB_PATH)], input=SEED_PATH.read_bytes(), check=True)
-
-
-ensure_db_initialized()
-
-
-def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    Se usa una conexión corta por operación (pattern sencillo y suficiente
+    para el tráfico esperado de IA-HASH v1.2).
+    """
+    conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def get_prompt_by_slug(slug: str) -> Optional[Dict[str, Any]]:
-    conn = get_connection()
+@contextmanager
+def db_conn() -> Iterator[sqlite3.Connection]:
+    conn = _get_connection()
     try:
-        cur = conn.execute(
-            """
-            SELECT id, slug, owner_id, title, description, full_prompt, category, is_master, visibility,
-                   h_public, h_secret, signature_prompt, created_at, updated_at
-            FROM prompts
-            WHERE slug = ?
-            """,
-            (slug,),
-        )
-        row = cur.fetchone()
-        return dict(row) if row else None
-    finally:
-        conn.close()
-
-
-def list_prompts() -> List[Dict[str, Any]]:
-    conn = get_connection()
-    try:
-        cur = conn.execute(
-            """
-            SELECT id, slug, owner_id, title, description, category, is_master, visibility, created_at, updated_at
-            FROM prompts
-            ORDER BY category, slug
-            """
-        )
-        return [dict(r) for r in cur.fetchall()]
-    finally:
-        conn.close()
-
-
-def store_iah_document(document: Dict[str, Any]) -> None:
-    conn = get_connection()
-    try:
-        conn.execute(
-            """
-            INSERT INTO iahash_documents (
-                iah_id, prompt_id, type, mode, prompt_hmac_verified, protocol_version, model, timestamp,
-                h_prompt, h_response, h_total, issuer_id, issuer_pk_url, signature,
-                conversation_url, provider, subject_id, store_raw, raw_prompt_text, raw_response_text, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-            """,
-            (
-                document.get("iah_id"),
-                document.get("prompt_id"),
-                document.get("type"),
-                document.get("mode"),
-                1 if document.get("prompt_hmac_verified") else 0,
-                document.get("protocol_version"),
-                document.get("model"),
-                document.get("timestamp"),
-                document.get("h_prompt"),
-                document.get("h_response"),
-                document.get("h_total"),
-                document.get("issuer_id"),
-                document.get("issuer_pk_url"),
-                document.get("signature"),
-                document.get("conversation_url"),
-                document.get("provider"),
-                document.get("subject_id"),
-                1 if document.get("store_raw") else 0,
-                document.get("raw_prompt_text") if document.get("store_raw") else None,
-                document.get("raw_response_text") if document.get("store_raw") else None,
-            ),
-        )
+        yield conn
         conn.commit()
     finally:
         conn.close()
 
 
-def get_iah_document_by_id(iah_id: str) -> Optional[Dict[str, Any]]:
-    conn = get_connection()
-    try:
-        cur = conn.execute(
-            """
-            SELECT * FROM iahash_documents WHERE iah_id = ?
-            """,
-            (iah_id,),
-        )
-        row = cur.fetchone()
-        return dict(row) if row else None
-    finally:
-        conn.close()
+# ============================================================================
+# Utilidades internas
+# ============================================================================
+
+def _get_table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    """
+    Devuelve el conjunto de nombres de columnas de una tabla.
+
+    Esto nos permite insertar solo las columnas que existan realmente,
+    haciendo el código tolerante a cambios de schema (por ejemplo,
+    si todavía no has actualizado schema.sql en producción).
+    """
+    cur = conn.execute(f"PRAGMA table_info({table})")
+    return {row["name"] for row in cur.fetchall()}
 
 
-def list_sequences() -> List[Dict[str, Any]]:
-    conn = get_connection()
-    try:
-        sequences = [dict(r) for r in conn.execute("SELECT * FROM sequences ORDER BY created_at DESC").fetchall()]
-        for seq in sequences:
-            seq["steps"] = get_sequence_steps(conn, seq["id"])
-        return sequences
-    finally:
-        conn.close()
+# ============================================================================
+# API pública
+# ============================================================================
 
+def store_iah_document(document: Dict[str, Any]) -> Optional[int]:
+    """
+    Inserta un documento IA-HASH en la tabla iahash_documents.
 
-def get_sequence_by_slug(slug: str) -> Optional[Dict[str, Any]]:
-    conn = get_connection()
-    try:
-        cur = conn.execute("SELECT * FROM sequences WHERE slug = ?", (slug,))
-        row = cur.fetchone()
-        if not row:
+    Espera un dict en el formato que construye iahash.issuer._issue_document,
+    por ejemplo:
+
+        {
+            "iah_id": "...",
+            "prompt_id": ...,
+            "type": "PAIR" | "CONVERSATION",
+            "mode": "LOCAL" | "TRUSTED_URL",
+            "prompt_hmac_verified": bool,
+            "protocol_version": "...",
+            "model": "...",
+            "timestamp": "...",
+            "h_prompt": "...",
+            "h_response": "...",
+            "h_total": "...",
+            "issuer_id": "...",
+            "issuer_pk_url": "...",
+            "signature": "...",
+            "conversation_url": "...",
+            "provider": "...",
+            "subject_id": "...",
+            "store_raw": bool,
+            "raw_prompt_text": "...",
+            "raw_response_text": "...",
+            # opcionales:
+            "raw_context_text": "...",
+            ...
+        }
+
+    Además, este helper serializa el documento completo a JSON y lo guarda
+    en la columna json_document si existe (opción B).
+    """
+    # json_document: document completo en bruto, para auditoría futura
+    json_document = json.dumps(document, ensure_ascii=False, separators=(",", ":"))
+
+    with db_conn() as conn:
+        cols = _get_table_columns(conn, "iahash_documents")
+
+        base_data: Dict[str, Any] = {
+            "iah_id": document.get("iah_id"),
+            "prompt_id": document.get("prompt_id"),
+            "type": document.get("type"),
+            "mode": document.get("mode"),
+            "prompt_hmac_verified": int(bool(document.get("prompt_hmac_verified"))),
+            "protocol_version": document.get("protocol_version"),
+            "model": document.get("model"),
+            "timestamp": document.get("timestamp"),
+            "h_prompt": document.get("h_prompt"),
+            "h_response": document.get("h_response"),
+            "h_total": document.get("h_total"),
+            "issuer_id": document.get("issuer_id"),
+            "issuer_pk_url": document.get("issuer_pk_url"),
+            "signature": document.get("signature"),
+            "conversation_url": document.get("conversation_url"),
+            "provider": document.get("provider"),
+            "subject_id": document.get("subject_id"),
+            "store_raw": int(bool(document.get("store_raw"))),
+            "raw_prompt_text": document.get("raw_prompt_text"),
+            "raw_response_text": document.get("raw_response_text"),
+            # campos opcionales de esquema v1.2 extendido:
+            "raw_context_text": document.get("raw_context_text"),
+            "json_document": json_document,
+        }
+
+        # Filtramos solo las columnas que existan realmente
+        data = {k: v for k, v in base_data.items() if k in cols}
+
+        if not data:
+            # Algo muy raro: tabla sin columnas esperadas
             return None
-        sequence = dict(row)
-        sequence["steps"] = get_sequence_steps(conn, sequence["id"])
-        return sequence
-    finally:
-        conn.close()
 
+        column_names = ", ".join(data.keys())
+        placeholders = ", ".join(["?"] * len(data))
+        values = list(data.values())
 
-def get_sequence_steps(conn: sqlite3.Connection, sequence_id: int) -> List[Dict[str, Any]]:
-    cur = conn.execute(
-        """
-        SELECT ss.id, ss.position, ss.title, ss.description, ss.prompt_id, p.slug as prompt_slug
-        FROM sequence_steps ss
-        LEFT JOIN prompts p ON ss.prompt_id = p.id
-        WHERE ss.sequence_id = ?
-        ORDER BY ss.position ASC
-        """,
-        (sequence_id,),
-    )
-    return [dict(r) for r in cur.fetchall()]
+        sql = f"INSERT INTO iahash_documents ({column_names}) VALUES ({placeholders})"
+        cur = conn.execute(sql, values)
+        return cur.lastrowid
