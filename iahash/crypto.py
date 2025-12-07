@@ -2,43 +2,70 @@
 """
 Core cryptographic primitives for IA-HASH v1.2.
 
-Implements:
-- Text normalisation (protocol 1.2)
-- SHA-256 hashing helpers
-- Ed25519 signing / verification
-- IA-HASH combined hash (h_total)
-- IA-HASH public identifier (iah_id)
+Implementa:
 
-Protocol reference:
-  - PROTOCOL_1.2.md
+- Normalización de texto (protocolo 1.2)
+- Helpers SHA-256
+- Firmas / verificación Ed25519
+- Cálculo de hashes para pares (prompt + respuesta)
+- IA-HASH ID público (`iah_id`, base58)
+- Funciones de compatibilidad con versiones anteriores:
+  - normalise(...)
+  - sign_message(...)
+  - verify_signature(...)
+  - derive_iah_id(...)
+
+Las claves del emisor se gestionan vía ficheros PEM, generados por `start.sh`:
+
+    /data/keys/issuer_ed25519.private
+    /data/keys/issuer_ed25519.pub
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
-from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 
-# -------- Normalisation -----------------------------------------------------
+# ============================================================================
+# Constantes y paths de claves
+# ============================================================================
+
+PROTOCOL_VERSION = "IAHASH-1.2"
+
+# Directorio y paths por defecto (alineados con start.sh)
+KEY_DIR = Path(os.getenv("IAHASH_KEY_DIR", "/data/keys"))
+DEFAULT_PRIVATE_KEY_PATH = Path(
+    os.getenv("IAHASH_PRIVATE_KEY_FILE", KEY_DIR / "issuer_ed25519.private")
+)
+DEFAULT_PUBLIC_KEY_PATH = Path(
+    os.getenv("IAHASH_PUBLIC_KEY_FILE", KEY_DIR / "issuer_ed25519.pub")
+)
 
 
-def normalize_text(text: str) -> str:
+# ============================================================================
+# Normalización de texto
+# ============================================================================
+
+def normalize_text(text: str | None) -> str:
     """
-    Normalise text according to IA-HASH v1.2 rules:
+    Normaliza texto según IA-HASH v1.2:
 
+    - None -> ""
     - Unicode NFC
     - CRLF / CR -> LF
-    - Trim trailing spaces on each line
-    - Remove trailing empty lines
-    - Keep internal newlines intact
+    - Quita espacios/tabs al final de cada línea
+    - Elimina líneas vacías finales
+    - Mantiene saltos de línea internos
 
-    Returns a normalised string. Later we encode as UTF-8 bytes.
+    Devuelve str normalizado (UTF-8 se aplica en otra función).
     """
     if text is None:
         text = ""
@@ -46,38 +73,52 @@ def normalize_text(text: str) -> str:
     # Unicode NFC
     text = unicodedata.normalize("NFC", text)
 
-    # Normalise line endings to "\n"
+    # Normalizar finales de línea a "\n"
     text = text.replace("\r\n", "\n").replace("\r", "\n")
 
-    # Strip trailing spaces on each line
+    # Strip de espacios/tabs al final de cada línea
     lines = [line.rstrip(" \t") for line in text.split("\n")]
 
-    # Remove trailing empty lines
+    # Eliminar líneas vacías al final
     while lines and lines[-1] == "":
         lines.pop()
 
     return "\n".join(lines)
 
 
-def normalized_bytes(text: str) -> bytes:
-    """
-    Convenience: normalise and then encode to UTF-8 bytes.
-    """
+def normalized_bytes(text: str | None) -> bytes:
+    """Atajo: normaliza y luego codifica a bytes UTF-8."""
     return normalize_text(text).encode("utf-8")
 
 
-# -------- Hash helpers ------------------------------------------------------
+# Función de compatibilidad usada en tests antiguos
+def normalise(text: str | None) -> bytes:
+    """
+    Compatibilidad con versiones anteriores.
 
+    Antes la función principal se llamaba `normalise` y devolvía bytes.
+    Ahora la implementación real está en `normalize_text` + `normalized_bytes`,
+    pero mantenemos este wrapper para no romper código/test antiguos.
+    """
+    return normalized_bytes(text)
+
+
+# ============================================================================
+# Helpers SHA-256
+# ============================================================================
 
 def sha256_hex(data: bytes) -> str:
-    """Return SHA-256 as lowercase hex string."""
+    """Devuelve SHA-256 en minúsculas, formato hex."""
     return hashlib.sha256(data).hexdigest()
 
 
+# ============================================================================
+# Hashes de par (prompt + respuesta)
+# ============================================================================
+
 @dataclass
 class PairHashes:
-    """Hashes for a prompt–response pair under IA-HASH v1.2."""
-
+    """Hashes para un par prompt–respuesta bajo IA-HASH v1.2."""
     h_prompt: str
     h_response: str
     h_total: str
@@ -93,27 +134,26 @@ def compute_pair_hashes(
     timestamp: str,
 ) -> PairHashes:
     """
-    Compute h_prompt, h_response and h_total for a prompt–response pair.
+    Calcula h_prompt, h_response y h_total para un par prompt–respuesta.
 
-    According to PROTOCOL_1.2:
+    Definido en PROTOCOL 1.2:
 
-      h_prompt   = SHA256(normalised_prompt)
-      h_response = SHA256(normalised_response)
-      h_total    = SHA256(
-                      protocol_version | prompt_id | h_prompt |
-                      h_response | model | timestamp
-                    )
+        h_prompt   = SHA256(normalised_prompt)
+        h_response = SHA256(normalised_response)
+        h_total    = SHA256(
+                        protocol_version | prompt_id | h_prompt |
+                        h_response | model | timestamp
+                     )
 
-    Where '|' is literal pipe and empty string is used for null prompt_id.
+    Donde '|' es el pipe literal, y prompt_id vacío se representa como "".
     """
-
-    # 1) Normalise both texts and hash individually
+    # 1) Normalizar y hashear prompt / respuesta
     h_prompt = sha256_hex(normalized_bytes(prompt_text))
     h_response = sha256_hex(normalized_bytes(response_text))
 
-    # 2) Build combined string
-    pid_component = prompt_id or ""  # null → empty string
-    combined = "|".join(
+    # 2) Construir string combinado
+    pid_component = prompt_id or ""  # null → ""
+    combined_str = "|".join(
         [
             protocol_version,
             pid_component,
@@ -122,38 +162,35 @@ def compute_pair_hashes(
             model,
             timestamp,
         ]
-    ).encode("utf-8")
-
-    h_total = sha256_hex(combined)
+    )
+    h_total = sha256_hex(combined_str.encode("utf-8"))
 
     return PairHashes(h_prompt=h_prompt, h_response=h_response, h_total=h_total)
 
 
-# -------- Ed25519 key handling ----------------------------------------------
-
+# ============================================================================
+# Gestión de claves Ed25519
+# ============================================================================
 
 def load_ed25519_private_key(path: Path) -> ed25519.Ed25519PrivateKey:
     """
-    Load an Ed25519 private key from a PEM file.
-
-    The key should be written without password, in the usual OpenSSL/cryptography format.
+    Carga una clave privada Ed25519 desde PEM (sin password).
     """
     data = path.read_bytes()
     return serialization.load_pem_private_key(data, password=None)
 
 
 def load_ed25519_public_key(path: Path) -> ed25519.Ed25519PublicKey:
-    """
-    Load an Ed25519 public key from a PEM file.
-    """
+    """Carga una clave pública Ed25519 desde PEM."""
     data = path.read_bytes()
     return serialization.load_pem_public_key(data)
 
 
 def generate_ed25519_keypair() -> Tuple[ed25519.Ed25519PrivateKey, ed25519.Ed25519PublicKey]:
     """
-    Generate a new Ed25519 keypair (in-memory).
-    Persisting is responsibility of the caller/startup script.
+    Genera un nuevo par de claves Ed25519 en memoria.
+
+    La persistencia en disco se deja al caller (p. ej. start.sh).
     """
     private_key = ed25519.Ed25519PrivateKey.generate()
     public_key = private_key.public_key()
@@ -161,9 +198,7 @@ def generate_ed25519_keypair() -> Tuple[ed25519.Ed25519PrivateKey, ed25519.Ed255
 
 
 def save_ed25519_private_key(key: ed25519.Ed25519PrivateKey, path: Path) -> None:
-    """
-    Save an Ed25519 private key to PEM (no password).
-    """
+    """Guarda una clave privada Ed25519 en PEM (sin password)."""
     pem = key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
@@ -173,9 +208,7 @@ def save_ed25519_private_key(key: ed25519.Ed25519PrivateKey, path: Path) -> None
 
 
 def save_ed25519_public_key(key: ed25519.Ed25519PublicKey, path: Path) -> None:
-    """
-    Save an Ed25519 public key to PEM.
-    """
+    """Guarda una clave pública Ed25519 en PEM."""
     pem = key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -183,7 +216,57 @@ def save_ed25519_public_key(key: ed25519.Ed25519PublicKey, path: Path) -> None:
     path.write_bytes(pem)
 
 
-# -------- Signing helpers ---------------------------------------------------
+def load_issuer_private_key(path: Path | None = None) -> ed25519.Ed25519PrivateKey:
+    """
+    Carga la clave privada del emisor desde disco usando el path por defecto
+    (o uno explícito si se indica).
+    """
+    key_path = path or DEFAULT_PRIVATE_KEY_PATH
+    return load_ed25519_private_key(key_path)
+
+
+def load_issuer_public_key(path: Path | None = None) -> ed25519.Ed25519PublicKey:
+    """Carga la clave pública del emisor."""
+    key_path = path or DEFAULT_PUBLIC_KEY_PATH
+    return load_ed25519_public_key(key_path)
+
+
+# ============================================================================
+# Firmas (nivel bajo y nivel protocolo)
+# ============================================================================
+
+def sign_message(message: bytes, key_path: Path | None = None) -> str:
+    """
+    Firma un mensaje arbitrario con la clave privada del emisor y devuelve la
+    firma en hex.
+
+    Este helper es el que usan versiones anteriores de `issuer.py`.
+    """
+    private_key = load_issuer_private_key(key_path)
+    signature = private_key.sign(message)
+    return signature.hex()
+
+
+def verify_signature(
+    message: bytes,
+    signature_hex: str,
+    public_key: ed25519.Ed25519PublicKey,
+) -> bool:
+    """
+    Verifica una firma Ed25519 sobre `message` con una clave pública dada.
+
+    Devuelve True si la firma es válida, False en caso contrario.
+    """
+    try:
+        signature = bytes.fromhex(signature_hex)
+    except ValueError:
+        return False
+
+    try:
+        public_key.verify(signature, message)
+        return True
+    except Exception:
+        return False
 
 
 def sign_h_total(
@@ -191,9 +274,10 @@ def sign_h_total(
     h_total_hex: str,
 ) -> str:
     """
-    Sign h_total (hex string) with Ed25519 and return signature as hex string.
+    Firma h_total (hex) con Ed25519 y devuelve la firma en hex.
+
+    Implementado encima de `sign_message` para mantener compatibilidad.
     """
-    # Interpret h_total as raw bytes of its hex representation (protocol choice).
     message = bytes.fromhex(h_total_hex)
     signature = private_key.sign(message)
     return signature.hex()
@@ -205,62 +289,60 @@ def verify_h_total_signature(
     signature_hex: str,
 ) -> bool:
     """
-    Verify an Ed25519 signature over h_total.
-
-    Returns True if signature is valid, False otherwise.
+    Verifica una firma sobre h_total (hex). Devuelve True si es válida.
     """
     message = bytes.fromhex(h_total_hex)
-    signature = bytes.fromhex(signature_hex)
-    try:
-        public_key.verify(signature, message)
-        return True
-    except Exception:
-        return False
+    return verify_signature(message, signature_hex, public_key)
 
 
-# -------- IA-HASH ID (iah_id) -----------------------------------------------
+# ============================================================================
+# IA-HASH ID (iah_id) – Base58
+# ============================================================================
 
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 
 def _bytes_to_base58(data: bytes) -> str:
     """
-    Encode bytes into a base58 string (Bitcoin alphabet).
-
-    Implemented without external dependencies to keep the library lightweight.
+    Encode bytes a base58 (alfabeto Bitcoin) sin dependencias externas.
     """
-    # Convert bytes to integer
     num = int.from_bytes(data, byteorder="big")
 
-    # Special case zero
+    # Caso especial: todo ceros
     if num == 0:
         return _BASE58_ALPHABET[0]
 
-    result_chars = []
+    result_chars: list[str] = []
     while num > 0:
         num, rem = divmod(num, 58)
         result_chars.append(_BASE58_ALPHABET[rem])
 
-    # Deal with leading zeros: each leading 0x00 becomes a leading '1'
+    # Zeros iniciales -> '1'
     n_leading_zeros = len(data) - len(data.lstrip(b"\x00"))
     result_chars.extend(_BASE58_ALPHABET[0] for _ in range(n_leading_zeros))
 
-    # We built the string in reverse
+    # Construido al revés
     return "".join(reversed(result_chars))
 
 
 def compute_iah_id_from_h_total(h_total_hex: str) -> str:
     """
-    Compute the public IA-HASH identifier (iah_id) from h_total:
+    Calcula el identificador público IA-HASH (iah_id) a partir de h_total:
 
         iah_id = base58(SHA256(h_total_bytes))[:16]
 
-    Where h_total_bytes is the UTF-8 encoding of the hex string representation.
-
-    The 16-char prefix is enough for uniqueness and human use.
+    donde h_total_bytes es la codificación UTF-8 de la representación hex de
+    h_total.
     """
-    # Here we treat the hex string itself as bytes, not the underlying digest.
     h_bytes = h_total_hex.encode("utf-8")
     digest = hashlib.sha256(h_bytes).digest()
     b58 = _bytes_to_base58(digest)
     return b58[:16]
+
+
+# Compatibilidad con código antiguo que llamaba `derive_iah_id`
+def derive_iah_id(h_total_hex: str) -> str:
+    """
+    Alias de compatibilidad: antes la función se llamaba `derive_iah_id`.
+    """
+    return compute_iah_id_from_h_total(h_total_hex)
