@@ -1,5 +1,5 @@
 function isValidChatGPTShare(url) {
-  return /^https:\/\/(chatgpt\.com|chat\.openai\.com)\/share\//.test(url);
+  return /^https:\/\/chatgpt\.com\/share\/[0-9a-fA-F\-]+$/.test(url);
 }
 
 function toggleButtonState(button, isLoading, loadingText, defaultText) {
@@ -61,7 +61,7 @@ async function generatePair(promptId) {
   const button = document.getElementById("pair-submit");
   const resultContainer = document.getElementById("pair-result");
 
-  clearIAHASHContainer(resultContainer);
+  renderLoading(resultContainer, "Generando IA-HASH…");
   logEl.textContent = "Generando IA-HASH...";
   toggleButtonState(button, true, "Generando…", "Generar IA-HASH");
 
@@ -73,17 +73,17 @@ async function generatePair(promptId) {
     });
 
     const data = await res.json();
-    if (!res.ok) {
-      const detail = data?.detail || "Error generando IA-HASH";
-      renderIAHASHError(resultContainer, detail);
+    if (!res.ok || data?.status !== "ISSUED") {
+      const detail = data?.error?.message || data?.detail || "Error generando IA-HASH";
+      renderError(resultContainer, data);
       logEl.textContent = detail;
       return;
     }
 
-    renderIAHASHResult(resultContainer, data);
+    renderIssuedDocument(resultContainer, data);
     logEl.textContent = "IA-HASH emitido correctamente.";
   } catch (err) {
-    renderIAHASHError(resultContainer, "Error de red al generar IA-HASH.");
+    renderError(resultContainer, "Error de red al generar IA-HASH.");
     logEl.textContent = `Error de red: ${err}`;
   } finally {
     toggleButtonState(button, false, "Generando…", "Generar IA-HASH");
@@ -102,11 +102,11 @@ async function verifyShareWithIAHASH(promptId) {
   const provider = providerSelect?.value || "chatgpt";
   const model = modelInput?.value?.trim() || "chatgpt";
 
-  clearIAHASHContainer(resultContainer);
+  renderLoading(resultContainer, "Verificando URL y generando IA-HASH…");
   logEl.textContent = "";
 
   if (!isValidChatGPTShare(shareUrl)) {
-    renderIAHASHError(resultContainer, "URL inválida. Usa un enlace de chatgpt.com/share.");
+    renderError(resultContainer, "URL inválida. Usa un enlace de chatgpt.com/share.");
     return;
   }
 
@@ -126,18 +126,18 @@ async function verifyShareWithIAHASH(promptId) {
     });
 
     const data = await res.json();
-    if (!res.ok) {
-      const detail = data?.detail || "Error al verificar la URL";
-      renderIAHASHError(resultContainer, detail);
+    if (!res.ok || data?.status !== "ISSUED") {
+      const detail = data?.error?.message || data?.detail || "Error al verificar la URL";
+      renderError(resultContainer, data);
       logEl.textContent = detail;
       return;
     }
 
-    renderIAHASHResult(resultContainer, data);
+    renderIssuedDocument(resultContainer, data);
     updateSummary(data.document || {});
     logEl.textContent = "Documento IA-HASH generado desde ChatGPT.";
   } catch (err) {
-    renderIAHASHError(resultContainer, "Error de red al contactar con IA-HASH.");
+    renderError(resultContainer, "Error de red al contactar con IA-HASH.");
     logEl.textContent = `Error de red: ${err}`;
   } finally {
     toggleButtonState(button, false, "Verificando…", "Verificar con IA-HASH");

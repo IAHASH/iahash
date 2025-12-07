@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, HttpUrl
@@ -80,15 +82,33 @@ class IssueFromSharePayload(BaseModel):
 class IssueFromPromptUrlPayload(BaseModel):
     prompt_id: str | None = None
     provider: str = "chatgpt"
-    share_url: HttpUrl
+    share_url: str
     model: str | None = None
     subject_id: str | None = None
+
+
+logger = logging.getLogger(__name__)
+
+CHATGPT_SHARE_PATTERN = re.compile(r"^https://chatgpt\.com/share/[0-9a-fA-F\-]+$")
 
 
 def _issue_response(document: Dict[str, Any]) -> Dict[str, Any]:
     """Uniform response envelope for issuing endpoints."""
 
-    return {"status": "ISSUED", "document": document}
+    return {"status": "ISSUED", "document": document, "error": None}
+
+
+def _error_response(
+    code: str, message: str, *, status_code: int = 400
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ERROR",
+            "document": None,
+            "error": {"code": code, "message": message},
+        },
+    )
 
 
 def _resolve_prompt_id(prompt_id: Optional[str]) -> Optional[str]:
@@ -373,31 +393,43 @@ async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]
 
 
 def _issue_prompt_from_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]:
-    provider = (payload.provider or "").lower()
+    provider = (payload.provider or "").lower() or "chatgpt"
     if provider and provider != "chatgpt":
-        raise HTTPException(status_code=400, detail="Unsupported provider")
+        return _error_response("UNSUPPORTED_PROVIDER", "Unsupported provider")
 
-    share_url = str(payload.share_url)
+    share_url = (payload.share_url or "").strip()
+    if not CHATGPT_SHARE_PATTERN.match(share_url):
+        return _error_response(
+            "INVALID_URL",
+            "URL inválida. Debe ser un enlace https://chatgpt.com/share/...",
+        )
 
-    resolved_prompt_id = _resolve_prompt_id(payload.prompt_id)
+    try:
+        resolved_prompt_id = _resolve_prompt_id(payload.prompt_id)
+    except HTTPException as exc:
+        return _error_response("PROMPT_NOT_FOUND", exc.detail, status_code=exc.status_code)
 
     try:
         extracted = extract_chatgpt_share(share_url)
     except UnsupportedProvider as exc:
-        raise HTTPException(status_code=400, detail="Invalid or unsupported share URL") from exc
+        return _error_response("INVALID_URL", "Invalid or unsupported share URL")
     except UnreachableSource as exc:  # pragma: no cover - network defensive
-        raise HTTPException(status_code=400, detail="Cannot fetch ChatGPT share URL") from exc
+        return _error_response(
+            "FETCH_FAILED", "Cannot fetch ChatGPT share URL"
+        )
     except Exception as exc:  # pragma: no cover - defensive
-        raise HTTPException(
-            status_code=500, detail="Unexpected error extracting conversation"
-        ) from exc
+        return _error_response(
+            "INTERNAL_ERROR",
+            "Unexpected error extracting conversation",
+            status_code=500,
+        )
 
     prompt_text = extracted.get("prompt_text")
     response_text = extracted.get("response_text")
 
     if not prompt_text or not response_text:
-        raise HTTPException(
-            status_code=400, detail="Cannot extract conversation from share URL"
+        return _error_response(
+            "PARSING_FAILED", "Cannot extract conversation from share URL"
         )
 
     model_value = (
@@ -421,9 +453,11 @@ def _issue_prompt_from_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]
             store_raw=True,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _error_response("PARSING_FAILED", str(exc))
     except Exception as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=500, detail="Unexpected issuing error") from exc
+        return _error_response(
+            "INTERNAL_ERROR", "Unexpected issuing error", status_code=500
+        )
 
     return _issue_response(document)
 
@@ -434,9 +468,15 @@ def api_issue_from_prompt_url(payload: IssueFromPromptUrlPayload) -> Dict[str, A
 
 
 @app.post("/api/verify/prompt_url", deprecated=True)
-def api_verify_prompt_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]:
+def api_verify_prompt_url(
+    payload: IssueFromPromptUrlPayload, response: Response
+) -> Dict[str, Any]:
     """Deprecated alias kept for backward compatibility."""
 
+    logger.warning(
+        "Deprecated endpoint /api/verify/prompt_url called; prefer /api/issue/from_prompt_url"
+    )
+    response.headers["X-IAHASH-Deprecated"] = "true"
     return _issue_prompt_from_url(payload)
 
 

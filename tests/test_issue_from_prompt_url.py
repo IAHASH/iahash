@@ -20,7 +20,7 @@ def prompt_record(monkeypatch):
 def test_issue_from_prompt_url_issues_document(monkeypatch, temp_keys, prompt_record):
     monkeypatch.setenv("IAHASH_KEYS_DIR", str(temp_keys))
 
-    share_url = "https://chatgpt.com/share/demo-123"
+    share_url = "https://chatgpt.com/share/a1b2c3d4-1234"
 
     def fake_extract(url: str):
         assert url == share_url
@@ -47,6 +47,7 @@ def test_issue_from_prompt_url_issues_document(monkeypatch, temp_keys, prompt_re
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ISSUED"
+    assert data["error"] is None
 
     document = data.get("document") or {}
     assert document.get("conversation_url") == share_url
@@ -55,3 +56,19 @@ def test_issue_from_prompt_url_issues_document(monkeypatch, temp_keys, prompt_re
     assert document.get("model") == "gpt-4o"
     assert document.get("h_prompt")
     assert document.get("h_response")
+
+
+def test_issue_from_prompt_url_invalid_url(monkeypatch, temp_keys, prompt_record):
+    monkeypatch.setenv("IAHASH_KEYS_DIR", str(temp_keys))
+
+    client = TestClient(app)
+    resp = client.post(
+        "/api/issue/from_prompt_url",
+        json={"prompt_id": str(prompt_record), "provider": "chatgpt", "share_url": "invalid"},
+    )
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "ERROR"
+    assert data["document"] is None
+    assert data["error"]["code"] == "INVALID_URL"

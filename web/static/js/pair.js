@@ -32,6 +32,7 @@ function setLoading(button, isLoading, loadingText, defaultText) {
 
 function logResult(targetId, data, fallbackError) {
   const el = document.getElementById(targetId);
+  if (!el) return;
   try {
     el.textContent = JSON.stringify(data, null, 2);
   } catch (err) {
@@ -40,7 +41,7 @@ function logResult(targetId, data, fallbackError) {
 }
 
 function isValidChatGPTShare(url) {
-  return /^https:\/\/(chatgpt\.com|chat\.openai\.com)\/share\//.test(url);
+  return /^https:\/\/chatgpt\.com\/share\/[0-9a-fA-F\-]+$/.test(url);
 }
 
 async function submitPair() {
@@ -55,7 +56,7 @@ async function submitPair() {
   const resultContainer = document.getElementById("result-card");
 
   logEl.textContent = "Enviando…";
-  clearIAHASHContainer(resultContainer);
+  renderLoading(resultContainer, "Generando IA-HASH…");
   setLoading(button, true, "Generando…", "Generar IA-HASH");
 
   try {
@@ -66,19 +67,19 @@ async function submitPair() {
     });
 
     const data = await res.json();
-    if (!res.ok) {
-      const detail = data?.detail || "Error generando IA-HASH";
+    if (!res.ok || data?.status !== "ISSUED") {
+      const detail = data?.error?.message || data?.detail || "Error generando IA-HASH";
       logEl.textContent = detail;
-      renderIAHASHError(resultContainer, detail);
+      renderError(resultContainer, data);
       return;
     }
 
     logResult("pair-log", data);
-    renderIAHASHResult(resultContainer, data);
+    renderIssuedDocument(resultContainer, data);
   } catch (err) {
     const msg = `Error de red: ${err}`;
     logEl.textContent = msg;
-    renderIAHASHError(resultContainer, msg);
+    renderError(resultContainer, msg);
   } finally {
     setLoading(button, false, "Generando…", "Generar IA-HASH");
   }
@@ -96,12 +97,12 @@ async function submitConversation() {
   const button = document.getElementById("conv-submit");
   const resultContainer = document.getElementById("result-card");
 
-  clearIAHASHContainer(resultContainer);
+  renderLoading(resultContainer, "Verificando URL y generando IA-HASH…");
   logEl.textContent = "Enviando…";
 
   if (!isValidChatGPTShare(payload.share_url || "")) {
     const detail = "URL inválida. Usa un enlace de chatgpt.com/share.";
-    renderIAHASHError(resultContainer, detail);
+    renderError(resultContainer, { message: detail });
     logEl.textContent = detail;
     return;
   }
@@ -116,19 +117,20 @@ async function submitConversation() {
     });
 
     const data = await res.json();
-    if (!res.ok) {
-      const detail = data?.detail || "Error verificando conversación";
+    if (!res.ok || data?.status !== "ISSUED") {
+      const detail =
+        data?.error?.message || data?.detail || "Error verificando conversación";
       logEl.textContent = detail;
-      renderIAHASHError(resultContainer, detail);
+      renderError(resultContainer, data);
       return;
     }
 
     logResult("conv-log", data);
-    renderIAHASHResult(resultContainer, data);
+    renderIssuedDocument(resultContainer, data);
   } catch (err) {
     const msg = `Error de red: ${err}`;
     logEl.textContent = msg;
-    renderIAHASHError(resultContainer, msg);
+    renderError(resultContainer, msg);
   } finally {
     setLoading(button, false, "Generando…", "Generar IA-HASH");
   }

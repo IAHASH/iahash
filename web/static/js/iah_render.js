@@ -5,33 +5,48 @@ function clearIAHASHContainer(container) {
   container.className = "result-card";
 }
 
-function renderIAHASHError(container, message) {
+function renderLoading(container, labelText = "Procesando…") {
   if (!container) return;
   clearIAHASHContainer(container);
-  container.classList.add("verify-result", "verify-result--error");
-  container.innerHTML = `<strong>Error:</strong> <span style="margin-left: 6px;">${
-    message || "Ocurrió un error"
-  }</span>`;
+  container.classList.add("result-card", "verify-result");
+  container.innerHTML = `<div class="loading">${labelText}</div>`;
   container.style.display = "block";
 }
 
-function renderIAHASHResult(container, iahashDoc) {
+function renderError(container, payload) {
   if (!container) return;
+  const message =
+    (payload && payload.error && payload.error.message) ||
+    payload?.detail ||
+    payload?.message ||
+    payload?.toString?.() ||
+    "Ocurrió un error";
 
-  const documentData = iahashDoc?.document || iahashDoc || {};
-  const verification = iahashDoc?.verification || {};
+  clearIAHASHContainer(container);
+  container.classList.add("verify-result", "verify-result--error");
+  container.innerHTML = `<strong>Error:</strong> <span style="margin-left: 6px;">${message}</span>`;
+  container.style.display = "block";
+}
+
+function renderIssuedDocument(container, response) {
+  if (!container) return;
+  const isIssued =
+    (response?.status ? response.status === "ISSUED" : Boolean(response?.document)) &&
+    response?.document;
+  if (!isIssued) {
+    return renderError(container, response || { message: "Respuesta inválida" });
+  }
+
+  const documentData = response.document || {};
+  const verification = response?.verification || {};
   const normalizedPrompt = verification.normalized_prompt_text;
   const normalizedResponse = verification.normalized_response_text;
   const shouldShowNormalized =
     documentData.store_raw && (normalizedPrompt || normalizedResponse);
 
   const iahId = documentData.iah_id || documentData.id || "—";
-  const statusText =
-    (iahashDoc?.status || documentData.status || documentData.state || "ISSUED")
-      .toString()
-      .toUpperCase();
-
-  const errors = verification.errors || iahashDoc?.errors || [];
+  const statusText = (response?.status || "ISSUED").toString().toUpperCase();
+  const errors = verification.errors || response?.errors || [];
 
   clearIAHASHContainer(container);
 
@@ -42,7 +57,7 @@ function renderIAHASHResult(container, iahashDoc) {
         <h3 class="iah-id">${iahId}</h3>
       </div>
       <div class="result-head-actions">
-        <button type="button" class="button-secondary copy-json">Copiar JSON</button>
+        <button type="button" class="button-secondary copy-json">Copiar JSON IA-HASH</button>
         <span class="badge" data-role="status">${statusText}</span>
       </div>
     </div>
@@ -158,7 +173,8 @@ function renderIAHASHResult(container, iahashDoc) {
   if (statusEl) {
     const normalized = statusText || "ISSUED";
     statusEl.textContent = normalized;
-    statusEl.className = "badge " +
+    statusEl.className =
+      "badge " +
       (normalized.includes("VERIFIED")
         ? "badge--ok"
         : normalized.includes("INVALID")
@@ -169,7 +185,7 @@ function renderIAHASHResult(container, iahashDoc) {
   const rawEl = container.querySelector("[data-field='raw']");
   if (rawEl) {
     try {
-      rawEl.textContent = JSON.stringify(iahashDoc, null, 2);
+      rawEl.textContent = JSON.stringify(response, null, 2);
     } catch (err) {
       rawEl.textContent = String(err);
     }
@@ -213,12 +229,15 @@ function renderIAHASHResult(container, iahashDoc) {
     navigator.clipboard?.writeText(text).then(() => {
       copyBtn.textContent = "Copiado";
       setTimeout(() => {
-        copyBtn.textContent = "Copiar JSON";
+        copyBtn.textContent = "Copiar JSON IA-HASH";
       }, 1200);
     });
   });
 }
 
-window.renderIAHASHResult = renderIAHASHResult;
-window.renderIAHASHError = renderIAHASHError;
+window.renderIssuedDocument = renderIssuedDocument;
+window.renderError = renderError;
+window.renderLoading = renderLoading;
+window.renderIAHASHResult = renderIssuedDocument;
+window.renderIAHASHError = renderError;
 window.clearIAHASHContainer = clearIAHASHContainer;
