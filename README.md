@@ -48,5 +48,8 @@ La normalización sigue PROTOCOL_1.2.md:
 ## Base de datos
 Tablas: `prompts`, `iahash_documents`, `sequences`, `sequence_steps`. Los textos raw solo se almacenan si `store_raw = 1`.
 
+## Mejoras rumbo a v1.2
+Sugerencias concretas para cerrar la versión se documentan en `docs/V1.2_IMPROVEMENTS.md`.
+
 ## Licencia
 Apache-2.0.
