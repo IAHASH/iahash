@@ -13,6 +13,9 @@ from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
 
 CHATGPT_SHARE_HOSTS = {"chat.openai.com", "chatgpt.com"}
 SHARE_PATH_FRAGMENT = "/share/"
+SHARE_UUID_PATTERN = re.compile(
+    r"^/share/(?P<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/?$"
+)
 
 ERROR_UNREACHABLE = "unreachable"
 ERROR_PARSING = "parsing"
@@ -39,6 +42,10 @@ def _validate_share_url(url: str) -> None:
         raise UnsupportedProvider("Unsupported conversation provider")
 
     if SHARE_PATH_FRAGMENT not in parsed.path:
+        raise UnsupportedProvider("Unsupported conversation format")
+
+    path_without_query = parsed.path
+    if not SHARE_UUID_PATTERN.match(path_without_query):
         raise UnsupportedProvider("Unsupported conversation format")
 
 

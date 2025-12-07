@@ -47,6 +47,7 @@ def test_verifier_handles_missing_issuer_pk_url(monkeypatch, public_key_bytes):
         response_text="Respuesta",
         model="gpt-x",
         issuer_pk_url="http://issuer.test/pubkey.pem",
+        issuer_id="remote.test",
     )
     doc.pop("issuer_pk_url")
 
@@ -54,7 +55,47 @@ def test_verifier_handles_missing_issuer_pk_url(monkeypatch, public_key_bytes):
 
     assert result["valid"] is False
     assert result["status"] == VerificationStatus.MALFORMED_DOCUMENT
-    assert "issuer_pk_url" in result["errors"][0]
+    assert "issuer_id does not match" in result["errors"][0]
+
+
+def test_verifier_resolves_local_issuer(monkeypatch, public_key_bytes):
+    monkeypatch.setattr("iahash.config.ISSUER_ID", "iahash.local")
+    monkeypatch.setattr("iahash.verifier.ISSUER_ID", "iahash.local")
+    monkeypatch.setattr("iahash.issuer.ISSUER_ID", "iahash.local")
+
+    monkeypatch.setattr(
+        "iahash.config.ISSUER_PK_URL", "http://issuer.local/pubkey.pem"
+    )
+    monkeypatch.setattr(
+        "iahash.verifier.ISSUER_PK_URL", "http://issuer.local/pubkey.pem"
+    )
+    monkeypatch.setattr(
+        "iahash.issuer.ISSUER_PK_URL", "http://issuer.local/pubkey.pem"
+    )
+
+    call_counter = {"url": None}
+
+    def fake_get(url, timeout=None):  # pragma: no cover - patched behaviour
+        call_counter["url"] = url
+        return httpx.Response(200, request=httpx.Request("GET", url), content=public_key_bytes)
+
+    monkeypatch.setattr("iahash.verifier.httpx.get", fake_get)
+
+    doc = issue_pair(
+        prompt_text="Pregunta?",
+        response_text="Respuesta",
+        model="gpt-x",
+        issuer_id="iahash.local",
+        issuer_pk_url="http://issuer.local/pubkey.pem",
+    )
+    doc.pop("issuer_pk_url")
+
+    result = verify_document(doc)
+
+    assert result["valid"] is True
+    assert result["status"] == VerificationStatus.VERIFIED
+    assert call_counter["url"] == "http://issuer.local/pubkey.pem"
+    assert result["resolved_issuer_pk_url"] == "http://issuer.local/pubkey.pem"
 
 
 def test_verifier_reports_invalid_url(monkeypatch, public_key_bytes):

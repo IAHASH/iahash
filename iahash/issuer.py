@@ -8,7 +8,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
-from iahash.config import ISSUER_PK_URL
+from iahash.config import ISSUER_ID, ISSUER_PK_URL
 from iahash.crypto import (
     PROTOCOL_VERSION as CRYPTO_PROTOCOL_VERSION,
     compute_pair_hashes,
@@ -290,7 +290,7 @@ def _issue_document(
     h_total = pair_hashes.h_total
 
     # Datos del emisor (issuer)
-    issuer_id_final = issuer_id or os.getenv("IAHASH_ISSUER_ID", "iahash.local")
+    issuer_id_final = issuer_id or ISSUER_ID
     issuer_pk_url_final = issuer_pk_url or ISSUER_PK_URL
 
     # Firma Ed25519 sobre h_total (como string hex)

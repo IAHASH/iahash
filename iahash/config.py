@@ -9,6 +9,9 @@ import os
 # ejecución.
 IAHASH_BASE_URL = os.getenv("IAHASH_BASE_URL", "http://localhost:8000")
 
+# Identificador del emisor local utilizado en los documentos IA-HASH
+ISSUER_ID = os.getenv("IAHASH_ISSUER_ID", "iahash.local")
+
 # URL pública de la clave del emisor utilizada en los documentos IA-HASH
 ISSUER_PK_URL = os.getenv(
     "IAHASH_ISSUER_PK_URL",

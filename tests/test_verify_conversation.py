@@ -57,7 +57,7 @@ def test_verify_conversation_success(temp_keys, monkeypatch):
             "response_text": "Mundo",
             "prompt_id": "P1",
             "model": "ignored",
-            "conversation_url": "https://chatgpt.com/share/abc",
+            "conversation_url": "https://chatgpt.com/share/6935bbc0-3fc4-8001-b6fa-b57c687905a8",
             "provider": "chatgpt",
         },
     )
@@ -85,7 +85,7 @@ def test_verify_conversation_unreachable(temp_keys, monkeypatch):
             "response_text": "Mundo",
             "prompt_id": "P1",
             "model": "ignored",
-            "conversation_url": "https://chatgpt.com/share/unreachable",
+            "conversation_url": "https://chatgpt.com/share/6935bbc0-3fc4-8001-b6fa-b57c687905a8",
             "provider": "chatgpt",
         },
     )

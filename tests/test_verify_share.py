@@ -32,7 +32,9 @@ def test_verify_share_success(temp_keys, monkeypatch, share_html):
     client = create_client()
     resp = client.post(
         "/api/verify/share",
-        json={"share_url": "https://chatgpt.com/share/abc123"},
+        json={
+            "share_url": "https://chatgpt.com/share/6935bbc0-3fc4-8001-b6fa-b57c687905a8"
+        },
     )
 
     assert resp.status_code == 200
@@ -75,7 +77,9 @@ def test_verify_share_parsing_failure(temp_keys, monkeypatch):
     client = create_client()
     resp = client.post(
         "/api/verify/share",
-        json={"share_url": "https://chatgpt.com/share/a1b2c3d4"},
+        json={
+            "share_url": "https://chatgpt.com/share/6935bbc0-3fc4-8001-b6fa-b57c687905a8"
+        },
     )
 
     assert resp.status_code == 400
