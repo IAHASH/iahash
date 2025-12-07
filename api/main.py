@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from iahash.db import (
+    create_sequence,
     ensure_db_initialized,
     get_iah_document_by_id,
     get_prompt_by_slug,
@@ -58,6 +59,23 @@ class IssueConversationRequest(BaseModel):
 
 class CheckRequest(BaseModel):
     document: Dict[str, Any]
+
+
+class SequenceStepPayload(BaseModel):
+    title: str
+    description: Optional[str] = None
+    prompt_id: Optional[int] = None
+    position: Optional[int] = None
+    model: str = "unknown"
+
+
+class SequencePayload(BaseModel):
+    slug: str
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    visibility: str = "public"
+    steps: Optional[list[SequenceStepPayload]] = None
 
 
 app = FastAPI(title=APP_NAME, version=API_VERSION, description=API_DESCRIPTION)
@@ -134,6 +152,14 @@ def web_sequences(request: Request) -> Any:
     sequences = list_sequences()
     return templates.TemplateResponse(
         "sequences.html", {"request": request, "sequences": sequences}
+    )
+
+
+@app.get("/sequences/new", response_class=HTMLResponse)
+def web_sequences_new(request: Request) -> Any:
+    prompts = list_prompts()
+    return templates.TemplateResponse(
+        "sequence_create.html", {"request": request, "prompts": prompts}
     )
 
 
@@ -255,6 +281,24 @@ def api_get_sequence(slug: str) -> Dict[str, Any]:
     sequence = get_sequence_by_slug(slug)
     if not sequence:
         raise HTTPException(status_code=404, detail="Sequence not found")
+    return {"sequence": sequence}
+
+
+@app.post("/api/sequences")
+def api_create_sequence(payload: SequencePayload) -> Dict[str, Any]:
+    try:
+        create_sequence(
+            slug=payload.slug,
+            title=payload.title,
+            description=payload.description,
+            category=payload.category,
+            visibility=payload.visibility,
+            steps=[step.dict() for step in payload.steps or []],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    sequence = get_sequence_by_slug(payload.slug)
     return {"sequence": sequence}
 
 

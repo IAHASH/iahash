@@ -87,7 +87,8 @@ CREATE TABLE IF NOT EXISTS sequences (
     description TEXT,
     category TEXT,
     visibility TEXT DEFAULT 'public',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS sequence_steps (
@@ -98,6 +99,7 @@ CREATE TABLE IF NOT EXISTS sequence_steps (
     description TEXT,
     prompt_id INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY(sequence_id) REFERENCES sequences(id),
     FOREIGN KEY(prompt_id) REFERENCES prompts(id)
 );

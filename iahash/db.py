@@ -345,6 +345,14 @@ def _apply_schema(conn: sqlite3.Connection, *, bootstrap: bool) -> None:
         " ON iahash_documents(created_at)"
     )
 
+    sequence_cols = _get_table_columns(conn, "sequences")
+    if "updated_at" not in sequence_cols:
+        conn.execute("ALTER TABLE sequences ADD COLUMN updated_at TEXT")
+
+    step_cols = _get_table_columns(conn, "sequence_steps")
+    if "updated_at" not in step_cols:
+        conn.execute("ALTER TABLE sequence_steps ADD COLUMN updated_at TEXT")
+
 
 def _load_seed_data(conn: sqlite3.Connection) -> None:
     """Carga seed_prompts.sql si existe y aún no hay prompts."""
@@ -474,6 +482,128 @@ def get_iah_document_by_id(iah_id: str) -> Optional[Dict[str, Any]]:
 # SECUENCIAS
 # ---------------------------------------------------------------------------
 
+def _insert_sequence_steps(
+    conn: sqlite3.Connection, sequence_id: int, steps: List[Dict[str, Any]]
+) -> None:
+    """Inserta los pasos de una secuencia asegurando orden estable."""
+
+    step_cols = _get_table_columns(conn, "sequence_steps")
+    now = datetime.now(timezone.utc).isoformat()
+
+    for position, step in enumerate(steps, start=1):
+        payload = {
+            "sequence_id": sequence_id,
+            "position": step.get("position") or position,
+            "title": step["title"],
+            "description": step.get("description"),
+            "prompt_id": step.get("prompt_id"),
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        filtered = {k: v for k, v in payload.items() if k in step_cols}
+        columns = ", ".join(filtered.keys())
+        placeholders = ", ".join(["?"] * len(filtered))
+        conn.execute(
+            f"INSERT INTO sequence_steps ({columns}) VALUES ({placeholders})",
+            list(filtered.values()),
+        )
+
+
+def create_sequence(
+    *,
+    slug: str,
+    title: str,
+    description: Optional[str] = None,
+    category: Optional[str] = None,
+    visibility: str = "public",
+    steps: Optional[List[Dict[str, Any]]] = None,
+) -> int:
+    """Crea una secuencia y sus pasos en una transacción única."""
+
+    conn = get_connection()
+    try:
+        cols = _get_table_columns(conn, "sequences")
+        now = datetime.now(timezone.utc).isoformat()
+        base_data = {
+            "slug": slug,
+            "title": title,
+            "description": description,
+            "category": category,
+            "visibility": visibility,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        filtered = {k: v for k, v in base_data.items() if k in cols}
+        column_names = ", ".join(filtered.keys())
+        placeholders = ", ".join(["?"] * len(filtered))
+
+        conn.execute(
+            f"INSERT INTO sequences ({column_names}) VALUES ({placeholders})",
+            list(filtered.values()),
+        )
+        seq_id = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+
+        if steps:
+            _insert_sequence_steps(conn, seq_id, steps)
+
+        conn.commit()
+        return seq_id
+    except sqlite3.IntegrityError as exc:
+        conn.rollback()
+        raise ValueError("Sequence with same slug already exists") from exc
+    finally:
+        conn.close()
+
+
+def update_sequence(
+    sequence_id: int,
+    *,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    category: Optional[str] = None,
+    visibility: Optional[str] = None,
+    steps: Optional[List[Dict[str, Any]]] = None,
+) -> None:
+    """Actualiza metadatos y pasos. Los pasos se sustituyen si se incluyen."""
+
+    conn = get_connection()
+    try:
+        cols = _get_table_columns(conn, "sequences")
+        cur = conn.execute("SELECT * FROM sequences WHERE id = ?", (sequence_id,))
+        existing = cur.fetchone()
+        if not existing:
+            raise ValueError(f"Sequence with id {sequence_id} not found")
+
+        payload = {
+            "title": title if title is not None else existing["title"],
+            "description": description
+            if description is not None
+            else existing["description"],
+            "category": category if category is not None else existing["category"],
+            "visibility": visibility
+            if visibility is not None
+            else existing["visibility"],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        filtered = {k: v for k, v in payload.items() if k in cols}
+        assignments = ", ".join([f"{k} = ?" for k in filtered.keys()])
+
+        conn.execute(
+            f"UPDATE sequences SET {assignments} WHERE id = ?",
+            [*filtered.values(), sequence_id],
+        )
+
+        if steps is not None:
+            conn.execute("DELETE FROM sequence_steps WHERE sequence_id = ?", (sequence_id,))
+            _insert_sequence_steps(conn, sequence_id, steps)
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def list_sequences() -> List[Dict[str, Any]]:
     conn = get_connection()
     try:
@@ -508,7 +638,8 @@ def get_sequence_steps(conn: sqlite3.Connection, sequence_id: int) -> List[Dict[
     cur = conn.execute(
         """
         SELECT ss.id, ss.position, ss.title, ss.description, ss.prompt_id,
-               p.slug as prompt_slug
+               ss.updated_at, p.slug as prompt_slug, p.title as prompt_title,
+               p.full_prompt as prompt_text
         FROM sequence_steps ss
         LEFT JOIN prompts p ON ss.prompt_id = p.id
         WHERE ss.sequence_id = ?

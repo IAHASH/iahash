@@ -5,16 +5,44 @@
     <p class="muted">{{ sequence.description }}</p>
     <div class="section">
       <h3>Steps</h3>
-      <ol class="muted">
+      <div class="stacked">
         {% for step in sequence.steps %}
-          <li>
-            <strong>{{ step.title }}</strong> — {{ step.description or '' }}
-            {% if step.prompt_slug %}
-              (<a href="/prompts/{{ step.prompt_slug }}">prompt</a>)
-            {% endif %}
-          </li>
+          <div class="card sequence-step" data-prompt-id="{{ step.prompt_id or '' }}">
+            <div class="section-header">
+              <div>
+                <p class="muted">Paso {{ step.position }}</p>
+                <h4>{{ step.title }}</h4>
+                {% if step.description %}<p class="muted">{{ step.description }}</p>{% endif %}
+              </div>
+              {% if step.prompt_slug %}
+                <a class="button secondary" href="/prompts/{{ step.prompt_slug }}" target="_blank">Ver prompt</a>
+              {% endif %}
+            </div>
+            <form class="form-grid">
+              <label class="field-block">
+                <span class="field-label">Prompt usado</span>
+                <textarea class="input step-prompt-text" rows="4">{{ step.prompt_text or '' }}</textarea>
+              </label>
+              <label class="field-block">
+                <span class="field-label">Respuesta de la IA</span>
+                <textarea class="input step-response-text" rows="4" placeholder="Pega la salida exacta"></textarea>
+              </label>
+              <div class="field-row">
+                <label class="field-block">
+                  <span class="field-label">Modelo</span>
+                  <input class="input step-model" value="unknown" />
+                </label>
+                <div class="field-block">
+                  <span class="field-label">&nbsp;</span>
+                  <button class="button" type="submit">Generar IA-HASH</button>
+                </div>
+              </div>
+            </form>
+            <pre class="muted result-raw step-result">Listo para generar IA-HASH…</pre>
+          </div>
         {% endfor %}
-      </ol>
+      </div>
     </div>
   </div>
+  <script src="/static/js/sequence_detail.js"></script>
 {% endblock %}
