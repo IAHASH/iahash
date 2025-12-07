@@ -80,6 +80,9 @@ class SequencePayload(BaseModel):
 
 app = FastAPI(title=APP_NAME, version=API_VERSION, description=API_DESCRIPTION)
 
+app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+
 # Ensure DB is ready for tests and scripts that do not trigger startup events.
 ensure_db_initialized()
 
