@@ -1,12 +1,14 @@
 # api/main.py
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import Optional, Any, Dict
+
 from datetime import datetime, timezone
 import hashlib
 import json
 import os
+from typing import Optional, Any, Dict
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
@@ -39,11 +41,14 @@ def _load_or_create_keys() -> tuple[Ed25519PrivateKey, Ed25519PublicKey]:
         with open(SECRET_KEY_PATH, "rb") as f:
             priv_bytes = f.read()
         private_key = serialization.load_pem_private_key(
-            priv_bytes, password=None
+            priv_bytes,
+            password=None,
         )
+
         with open(PUBLIC_KEY_PATH, "rb") as f:
             pub_bytes = f.read()
         public_key = serialization.load_pem_public_key(pub_bytes)
+
         return private_key, public_key
 
     # Generar claves nuevas
@@ -63,6 +68,7 @@ def _load_or_create_keys() -> tuple[Ed25519PrivateKey, Ed25519PublicKey]:
 
     with open(SECRET_KEY_PATH, "wb") as f:
         f.write(priv_pem)
+
     with open(PUBLIC_KEY_PATH, "wb") as f:
         f.write(pub_pem)
 
@@ -100,11 +106,12 @@ def canonicalize_text(value: str | None) -> str:
 
     # Normalizar saltos de línea
     value = value.replace("\r\n", "\n").replace("\r", "\n")
-
     lines = value.split("\n")
+
     # strip líneas vacías al principio
     while lines and lines[0].strip() == "":
         lines.pop(0)
+
     # strip líneas vacías al final
     while lines and lines[-1].strip() == "":
         lines.pop()
@@ -125,10 +132,10 @@ def canonical_payload(
     Construye el JSON canónico IA-HASH (sin hash/firma):
 
     {
-        "prompt": ...,
-        "contexto": ...,
-        "respuesta": ...,
-        "metadata": {...}
+      "prompt": ...,
+      "contexto": ...,
+      "respuesta": ...,
+      "metadata": {...}
     }
     """
     return {
@@ -147,7 +154,12 @@ def canonical_json_str(payload: Dict[str, Any]) -> str:
     - separators sin espacios
     - ensure_ascii=False para respetar UTF-8
     """
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
 
 
 def compute_hash(canonical_str: str) -> str:
@@ -164,7 +176,11 @@ def sign_canonical(canonical_str: str) -> str:
 
 
 def verify_signature(public_key_hex: str, canonical_str: str, signature_hex: str) -> bool:
-    """Verifica la firma Ed25519. Devuelve True si es válida."""
+    """
+    Verifica la firma Ed25519.
+
+    Devuelve True si es válida.
+    """
     try:
         pub_raw = bytes.fromhex(public_key_hex)
         public_key = Ed25519PublicKey.from_public_bytes(pub_raw)
@@ -185,9 +201,13 @@ class IssueRequest(BaseModel):
     response: str = Field(..., description="Respuesta completa del modelo.")
     model: Optional[str] = Field(None, description="Identificador del modelo usado.")
     prompt_id: Optional[str] = Field(None, description="ID interno opcional del prompt.")
-    subject_id: Optional[str] = Field(None, description="ID opcional del sujeto/usuario.")
+    subject_id: Optional[str] = Field(
+        None,
+        description="ID opcional del sujeto/usuario.",
+    )
     conversation_id: Optional[str] = Field(
-        None, description="ID opcional de la conversación (chat, thread...)."
+        None,
+        description="ID opcional de la conversación (chat, thread...).",
     )
     # Campo opcional para futuro (documentos, system prompt, etc.)
     contexto: Optional[str] = Field(
@@ -211,6 +231,7 @@ class VerifyResponse(BaseModel):
 # ============================================================================
 # FastAPI app
 # ============================================================================
+
 
 app = FastAPI(
     title="IA-HASH API",
@@ -239,13 +260,18 @@ def root():
     }
 
 
+@app.get("/health")
+def health():
+    """Endpoint sencillo para healthcheck."""
+    return {"status": "ok"}
+
+
 @app.get("/public-key")
 def public_key():
     """Devuelve la clave pública actual en hex y en PEM."""
     pub_hex = _public_key_hex()
     with open(PUBLIC_KEY_PATH, "rb") as f:
         pub_pem = f.read().decode("utf-8")
-
     return {
         "algorithm": "Ed25519",
         "public_key_hex": pub_hex,
@@ -267,6 +293,7 @@ def issue_iahash(body: IssueRequest):
     """
     if not body.prompt.strip():
         raise HTTPException(status_code=400, detail="El campo 'prompt' está vacío.")
+
     if not body.response.strip():
         raise HTTPException(status_code=400, detail="El campo 'response' está vacío.")
 
@@ -341,15 +368,14 @@ def verify_iahash(body: VerifyRequest):
     )
     canonical_str = canonical_json_str(payload)
     recomputed_hash = compute_hash(canonical_str)
-
     stored_hash = doc.get("hash", "")
+
     if recomputed_hash != stored_hash:
         errors.append("El hash no coincide con el contenido (documento modificado).")
 
     # Verificar firma
     pub_hex = doc.get("llave_publica", "")
     sig_hex = doc.get("firma", "")
-
     if not verify_signature(pub_hex, canonical_str, sig_hex):
         errors.append("La firma Ed25519 no es válida para este documento.")
 
@@ -364,7 +390,8 @@ def verify_iahash(body: VerifyRequest):
             "hash_recomputed": recomputed_hash,
             "hash_stored": stored_hash,
             "iahash_version": doc.get("metadata", {}).get(
-                "version_standard", IAHASH_VERSION
+                "version_standard",
+                IAHASH_VERSION,
             ),
         },
     )
