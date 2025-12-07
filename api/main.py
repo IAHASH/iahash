@@ -99,11 +99,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static: /static → carpeta web/static (styles.css, logo.png, JS, etc.)
-if WEB_DIR.exists():
+# Static: /static → carpeta web/static (styles.css, logo.png, etc.)
+static_dir = WEB_DIR / "static"
+if static_dir.exists():
     app.mount(
         "/static",
-        StaticFiles(directory=str(WEB_DIR / "static"), html=False),
+        StaticFiles(directory=str(static_dir), html=False),
         name="static",
     )
 
