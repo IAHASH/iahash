@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
-import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "db" / "iahash.db"
 SCHEMA_PATH = BASE_DIR / "db" / "schema.sql"
 SEED_PATH = BASE_DIR / "db" / "seed_prompts.sql"
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_db_initialized() -> None:
@@ -30,23 +32,23 @@ def ensure_db_initialized() -> None:
     if not SCHEMA_PATH.exists():
         raise FileNotFoundError(f"Schema file missing: {SCHEMA_PATH}")
 
-    # Aplica schema.sql
-    subprocess.run(
-        ["sqlite3", str(DB_PATH)],
-        input=SCHEMA_PATH.read_bytes(),
-        check=True,
-    )
-
-    # Aplica seed_prompts.sql si existe
-    if SEED_PATH.exists():
-        subprocess.run(
-            ["sqlite3", str(DB_PATH)],
-            input=SEED_PATH.read_bytes(),
-            check=True,
-        )
-
-
-ensure_db_initialized()
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+            if SEED_PATH.exists():
+                conn.executescript(SEED_PATH.read_text(encoding="utf-8"))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.exception("Failed to initialize database at %s", DB_PATH)
+        if DB_PATH.exists():
+            try:
+                DB_PATH.unlink()
+            except OSError:
+                logger.warning("Could not clean up partial database at %s", DB_PATH)
+        raise RuntimeError("Failed to initialize database") from exc
 
 
 def get_connection() -> sqlite3.Connection:

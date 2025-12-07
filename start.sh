@@ -8,14 +8,18 @@ echo "=========================================="
 SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
 
 # ---------------------------------------------------------------------------
+# PYTHONPATH para que FastAPI encuentre los módulos
+# ---------------------------------------------------------------------------
+
+export PYTHONPATH="$SCRIPT_DIR"
+
+# ---------------------------------------------------------------------------
 # DIRECTORIOS IMPORTANTES
 # ---------------------------------------------------------------------------
 
 KEY_DIR="/data/keys"
 DB_DIR="$SCRIPT_DIR/db"
 DB_PATH="$DB_DIR/iahash.db"
-SCHEMA_FILE="$DB_DIR/schema.sql"
-SEED_FILE="$DB_DIR/seed_prompts.sql"
 
 mkdir -p "$KEY_DIR"
 mkdir -p "$DB_DIR"
@@ -63,26 +67,20 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# BASE DE DATOS SQLITE
+# BASE DE DATOS SQLITE (sin binario externo)
 # ---------------------------------------------------------------------------
 
-if [ ! -f "$DB_PATH" ]; then
-  echo "[IA-HASH] Creating SQLite database..."
-  sqlite3 "$DB_PATH" < "$SCHEMA_FILE"
+echo "[IA-HASH] Preparing SQLite database..."
+python3 - <<'PY'
+from iahash.db import ensure_db_initialized, DB_PATH
 
-  if [ -f "$SEED_FILE" ]; then
-    echo "[IA-HASH] Loading initial seed data..."
-    sqlite3 "$DB_PATH" < "$SEED_FILE"
-  fi
-else
-  echo "[IA-HASH] Database already exists: $DB_PATH"
-fi
-
-# ---------------------------------------------------------------------------
-# PYTHONPATH para que FastAPI encuentre los módulos
-# ---------------------------------------------------------------------------
-
-export PYTHONPATH="$SCRIPT_DIR"
+try:
+    ensure_db_initialized()
+    print(f"[IA-HASH] Database ready at: {DB_PATH}")
+except Exception as exc:  # pragma: no cover - startup script
+    print(f"[IA-HASH] Failed to initialize database: {exc}")
+    raise
+PY
 
 # ---------------------------------------------------------------------------
 # ARRANQUE DEL SERVIDOR

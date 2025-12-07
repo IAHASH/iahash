@@ -27,6 +27,7 @@ from iahash.db import (
     list_sequences,
     get_sequence_by_slug,
     get_iah_document_by_id,
+    ensure_db_initialized,
 )
 
 
@@ -79,6 +80,11 @@ app = FastAPI(
     title=APP_NAME,
     version=API_VERSION,
 )
+
+
+@app.on_event("startup")
+def initialize_database() -> None:
+    ensure_db_initialized()
 
 # CORS liberal por ahora (podemos afinar luego)
 app.add_middleware(
