@@ -36,35 +36,43 @@ async function generateIAHash(promptId) {
   }
 }
 
-async function verifyConversation(promptId) {
-  const url = document.getElementById("conv-url").value;
-  const payload = {
-    conversation_url: url,
-    prompt_id: promptId,
-    prompt_text: document.getElementById("prompt-text").value,
-    provider: document.getElementById("conv-provider")?.value || "chatgpt",
-    model: document.getElementById("conv-model")?.value || "unknown",
-  };
-
+async function verifyShareWithIAHASH(promptId) {
+  const url = document.getElementById("conv-url").value.trim();
+  const model = (document.getElementById("conv-model")?.value || "chatgpt").trim() || "chatgpt";
+  const resultContainer = document.getElementById("conv-result");
   const logEl = document.getElementById("conv-log");
+
+  if (!url) {
+    showError(resultContainer, "Por favor, pega una URL de ChatGPT.");
+    return;
+  }
+
   logEl.textContent = "Procesando verificación...";
+  resultContainer.style.display = "block";
+  resultContainer.textContent = "Verificando…";
 
   try {
-    const res = await fetch("/api/verify/conversation", {
+    const res = await fetch("/api/issue-from-share", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        share_url: url,
+        model,
+        prompt_id: promptId,
+      }),
     });
 
-    const data = await res.json();
     if (!res.ok) {
-      const detail = data?.detail || "Error verificando conversación";
-      logEl.textContent = detail;
+      const text = await res.text();
+      showError(resultContainer, `Error al verificar la URL: ${text}`);
       return;
     }
 
-    logEl.textContent = JSON.stringify(data, null, 2);
+    const doc = await res.json();
+    renderIAHASHResult(resultContainer, doc);
+    logEl.textContent = "Documento IA-HASH generado desde ChatGPT share.";
   } catch (err) {
-    logEl.textContent = `Error de red: ${err}`;
+    console.error(err);
+    showError(resultContainer, "Error de red al contactar con IA-HASH.");
   }
 }

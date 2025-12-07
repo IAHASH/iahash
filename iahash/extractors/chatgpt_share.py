@@ -21,6 +21,8 @@ ERROR_UNSUPPORTED = "unsupported"
 __all__ = [
     "extract_from_url",
     "extract_chatgpt_share",
+    "extract_prompt_and_response_from_chatgpt_share",
+    "extract_payload_from_chatgpt_share",
     "ERROR_UNREACHABLE",
     "ERROR_PARSING",
     "ERROR_UNSUPPORTED",
@@ -82,11 +84,11 @@ def _collect_messages(mapping: Dict) -> tuple[Optional[str], Optional[str]]:
     return prompt_text, response_text
 
 
-def _extract_payload(next_data: Dict) -> Dict[str, str]:
+def _conversation_payload(data: Dict) -> Dict[str, str]:
     try:
         conversation = (
-            next_data["props"]["pageProps"].get("sharedConversation")
-            or next_data["props"]["pageProps"].get("serverResponse", {}).get("data", {})
+            data["props"]["pageProps"].get("sharedConversation")
+            or data["props"]["pageProps"].get("serverResponse", {}).get("data", {})
         )
     except Exception as exc:  # pragma: no cover - defensive branch
         raise UnsupportedProvider("Unsupported conversation format") from exc
@@ -104,8 +106,24 @@ def _extract_payload(next_data: Dict) -> Dict[str, str]:
         "prompt_text": prompt_text,
         "response_text": response_text,
         "model": model,
-        "provider": "chatgpt",
     }
+
+
+def extract_payload_from_chatgpt_share(data: Dict) -> Dict[str, str]:
+    return _conversation_payload(data)
+
+
+def extract_prompt_and_response_from_chatgpt_share(data: Dict) -> tuple[str, str]:
+    payload = _conversation_payload(data)
+    return payload["prompt_text"], payload["response_text"]
+
+
+def _extract_payload(next_data: Dict) -> Dict[str, str]:
+    payload = extract_payload_from_chatgpt_share(next_data)
+    payload["provider"] = "chatgpt"
+    if "model" not in payload:
+        payload["model"] = payload.get("model") or "unknown"
+    return payload
 
 
 def extract_from_url(url: str) -> Dict[str, str]:

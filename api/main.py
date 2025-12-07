@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import httpx
+from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 
 from iahash.db import (
     create_sequence,
@@ -21,7 +24,8 @@ from iahash.db import (
 )
 from iahash.config import ISSUER_PK_URL
 from iahash.crypto import get_issuer_public_key_pem
-from iahash.issuer import PROTOCOL_VERSION, issue_conversation, issue_pair
+from iahash.extractors.chatgpt_share import extract_payload_from_chatgpt_share
+from iahash.issuer import PROTOCOL_VERSION, issue_conversation, issue_from_share, issue_pair
 from iahash.verifier import verify_document
 
 APP_NAME = "IA-HASH API"
@@ -59,6 +63,13 @@ class IssueConversationRequest(BaseModel):
 
 class CheckRequest(BaseModel):
     document: Dict[str, Any]
+
+
+class IssueFromSharePayload(BaseModel):
+    share_url: HttpUrl
+    model: str | None = "chatgpt"
+    prompt_id: str | None = None
+    subject_id: str | None = None
 
 
 class SequenceStepPayload(BaseModel):
@@ -267,6 +278,49 @@ def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]
 def api_check(payload: CheckRequest) -> Dict[str, Any]:
     verification = verify_document(payload.document)
     return {"document": payload.document, "verification": verification}
+
+
+@app.post("/api/issue-from-share")
+async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]:
+    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+        response = await client.get(str(payload.share_url))
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=400, detail="Cannot fetch ChatGPT share URL")
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    script = soup.find("script", id="__NEXT_DATA__")
+    if not script or not script.string:
+        raise HTTPException(status_code=400, detail="ChatGPT share page has no data to parse")
+
+    try:
+        data = json.loads(script.string)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Cannot parse ChatGPT share payload") from exc
+
+    try:
+        payload_extracted = extract_payload_from_chatgpt_share(data)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    prompt_text = payload_extracted.get("prompt_text")
+    response_text = payload_extracted.get("response_text")
+    model_value = payload_extracted.get("model") or payload.model or "chatgpt"
+
+    if not prompt_text or not response_text:
+        raise HTTPException(status_code=400, detail="No se pudo extraer prompt o respuesta")
+
+    try:
+        return issue_from_share(
+            prompt_text=prompt_text,
+            response_text=response_text,
+            model=model_value,
+            share_url=str(payload.share_url),
+            prompt_id=payload.prompt_id,
+            subject_id=payload.subject_id,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/prompts")

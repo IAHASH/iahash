@@ -205,6 +205,36 @@ def issue_conversation(
     )
 
 
+def issue_from_share(
+    *,
+    prompt_text: str,
+    response_text: str,
+    model: str,
+    share_url: str,
+    prompt_id: Optional[str] = None,
+    subject_id: Optional[str] = None,
+    issuer_id: Optional[str] = None,
+    issuer_pk_url: Optional[str] = None,
+    store_raw: bool = False,
+) -> Dict[str, Any]:
+    """Emite un IA-HASH a partir de un enlace compartido de chat."""
+
+    return _issue_document(
+        prompt_text=prompt_text,
+        response_text=response_text,
+        prompt_id=prompt_id,
+        model=model or "chatgpt",
+        issuer_id=issuer_id,
+        issuer_pk_url=issuer_pk_url,
+        subject_id=subject_id,
+        store_raw=store_raw,
+        doc_type="CONVERSATION",
+        mode="TRUSTED_URL",
+        conversation_url=share_url,
+        provider="chatgpt",
+    )
+
+
 def _issue_document(
     *,
     prompt_text: str,
