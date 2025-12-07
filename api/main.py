@@ -94,7 +94,9 @@ class VerifySharePayload(BaseModel):
 logger = logging.getLogger(__name__)
 
 CHATGPT_SHARE_PATTERN = re.compile(
-    r"^https://(chatgpt\.com|chat\.openai\.com)/share/[0-9a-fA-F\-]+$"
+    r"^https://(chatgpt\.com|chat\.openai\.com)/share/"
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"/?(?:\?.*)?$"
 )
 
 
@@ -423,7 +425,13 @@ def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]
 @app.post("/api/check")
 def api_check(payload: CheckRequest) -> Dict[str, Any]:
     verification = verify_document(payload.document)
-    return {"document": payload.document, "verification": verification}
+    document = dict(payload.document)
+
+    resolved_issuer = verification.get("resolved_issuer_pk_url")
+    if not document.get("issuer_pk_url") and resolved_issuer:
+        document["issuer_pk_url"] = resolved_issuer
+
+    return {"document": document, "verification": verification}
 
 
 @app.post("/api/issue-from-share")

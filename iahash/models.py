@@ -44,7 +44,7 @@ class IAHashDocument(BaseModel):
     h_total: str
     signature: str
     issuer_id: str
-    issuer_pk_url: str
+    issuer_pk_url: Optional[str] = None
     conversation_url: Optional[str] = None
     provider: Optional[str] = None
     subject_id: Optional[str] = None

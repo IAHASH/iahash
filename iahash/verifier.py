@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from iahash.crypto import normalize_text, sha256_hex, verify_signature
+from iahash.config import ISSUER_ID, ISSUER_PK_URL
 from iahash.issuer import PROTOCOL_VERSION, build_total_hash_string
 from iahash.extractors.chatgpt_share import extract_chatgpt_share
 from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
@@ -101,13 +102,21 @@ def verify_document(
             "prompt_match": False,
             "prompt_hmac_valid": False,
             "errors": [error_message],
+            "resolved_issuer_pk_url": None,
         }
 
+    issuer_id = document.get("issuer_id")
     issuer_pk_url = document.get("issuer_pk_url")
     if not issuer_pk_url:
-        status = VerificationStatus.MALFORMED_DOCUMENT
-        status_detail = "MISSING_ISSUER_PK_URL"
-        return _fail(status, "issuer_pk_url is required")
+        if issuer_id and issuer_id == ISSUER_ID:
+            issuer_pk_url = ISSUER_PK_URL
+        else:
+            status = VerificationStatus.MALFORMED_DOCUMENT
+            status_detail = "MISSING_ISSUER_PK_URL"
+            return _fail(
+                status,
+                "Missing issuer_pk_url and issuer_id does not match local issuer",
+            )
 
     # 1) Cargar clave pública
     try:
@@ -152,7 +161,9 @@ def verify_document(
     raw_prompt = fetched_prompt if fetched_prompt is not None else document.get("raw_prompt_text")
     raw_response = (
         fetched_response if fetched_response is not None else document.get("raw_response_text")
-    )
+        )
+
+    resolved_issuer_pk_url = issuer_pk_url
 
     normalized_prompt_text: Optional[str] = None
     normalized_response_text: Optional[str] = None
@@ -286,4 +297,5 @@ def verify_document(
         "normalized_prompt_text": normalized_prompt_text,
         "normalized_response_text": normalized_response_text,
         "differences": differences,
+        "resolved_issuer_pk_url": resolved_issuer_pk_url,
     }

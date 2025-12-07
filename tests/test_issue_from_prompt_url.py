@@ -20,7 +20,7 @@ def prompt_record(monkeypatch):
 def test_issue_from_prompt_url_issues_document(monkeypatch, temp_keys, prompt_record):
     monkeypatch.setenv("IAHASH_KEYS_DIR", str(temp_keys))
 
-    share_url = "https://chatgpt.com/share/a1b2c3d4-1234"
+    share_url = "https://chatgpt.com/share/6935bbc0-3fc4-8001-b6fa-b57c687905a8"
 
     def fake_extract(url: str):
         assert url == share_url
