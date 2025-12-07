@@ -1,31 +1,387 @@
-{% extends "base.html" %}
-{% block content %}
-  <div class="grid">
-    <div class="card">
-      <h2>IA-HASH v1.2</h2>
-      <p>Sellado criptográfico y verificable para prompts y respuestas de IA. Compatible con FastAPI, SQLite y firmas Ed25519.</p>
-      <div class="flex">
-        <a class="button" href="/verify">Verificar ahora</a>
-        <a class="button secondary" href="/docs">Protocolo</a>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>IA-HASH · Prompt + Respuesta verificables</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="description"
+    content="IA-HASH genera JSON verificables con hashes SHA256 y firma Ed25519 para prompts + respuestas IA. Verificación offline, sin blockchain, sin vendor lock-in."
+  />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#hero" class="brand">
+        <img src="/static/logo.png" alt="IA-HASH logo" class="brand-logo" />
+        <span class="brand-text">IA-HASH</span>
+      </a>
+      <nav class="nav">
+        <a href="#hero">Inicio</a>
+        <a href="#issue-from-text">Emitir</a>
+        <a href="#verify">Verificar</a>
+        <a href="#docs">Docs / Help</a>
+        <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO + VERIFIER -->
+    <section id="hero" class="hero">
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <p class="hero-pill">NEUTRAL · OFFLINE · Ed25519</p>
+          <h1>Firma y verifica cualquier Prompt + Respuesta IA</h1>
+          <p class="hero-lead">
+            IA-HASH crea un JSON firmable con hashes SHA256 y firma Ed25519.
+            Funciona con ChatGPT, Claude, modelos locales o cualquier LLM.
+            Verificación offline, años después, sin depender de terceros.
+          </p>
+          <ul class="hero-list">
+            <li>✔ Integridad total del prompt y de la respuesta</li>
+            <li>✔ Firma criptográfica del emisor (Ed25519)</li>
+            <li>✔ Verificación offline, sin blockchain</li>
+            <li>✔ Independiente de proveedor y de modelo</li>
+          </ul>
+          <p class="hero-sub">
+            Emite IA-HASH desde tus prompts o pega un documento JSON a la derecha
+            para comprobar si está <strong>IA-HASH VERIFIED</strong>.
+          </p>
+        </div>
+
+        <div id="verify" class="hero-card">
+          <h2>Verificar documento IA-HASH</h2>
+          <p class="card-subtitle">
+            Pega el JSON emitido por tu asistente o backend IA y validamos hash + firma.
+          </p>
+
+          <form id="verify-form" class="verify-form">
+            <label for="iah-json-input" class="field-label">
+              IA-HASH JSON
+            </label>
+            <textarea
+              id="iah-json-input"
+              class="field-textarea"
+              rows="14"
+              spellcheck="false"
+              placeholder='{
+  "version": "IA-HASH-1",
+  "prompt_id": "cv_honesto_v1",
+  "prompt_maestro": "Prompt exacto enviado a la IA...",
+  "respuesta": "Salida generada por la IA...",
+  "modelo": "gpt-5.1-thinking",
+  ...
+}'
+            ></textarea>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Verificar IA-HASH</button>
+              <button type="button" id="clear-btn" class="btn btn-ghost">
+                Limpiar
+              </button>
+            </div>
+          </form>
+
+          <div id="result" class="verify-result verify-result--idle" style="display:none;">
+            <div class="verify-badge">
+              <span class="badge-dot"></span>
+              <span id="result-title">Listo para verificar.</span>
+            </div>
+            <p id="result-message" class="result-message">
+              Pega un documento IA-HASH JSON y pulsa “Verificar IA-HASH”.
+            </p>
+            <details class="result-details">
+              <summary>Detalle de verificación</summary>
+              <pre id="result-raw" class="result-raw">(sin datos)</pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ISSUE FROM PROMPT + RESPONSE -->
+    <section id="issue-from-text" class="section section-alt">
+      <div class="container">
+        <h2>Emitir IA-HASH desde Prompt + Respuesta</h2>
+        <p class="section-lead">
+          Pega el prompt exacto que usaste con la IA y la respuesta completa.
+          Generaremos un documento IA-HASH firmable que podrás guardar en tu SQL,
+          adjuntar a un PDF o compartir.
+        </p>
+
+        <div class="hero-card" style="margin-top:20px;">
+          <div class="verify-form">
+            <label for="issue-model" class="field-label">Modelo (opcional)</label>
+            <input
+              id="issue-model"
+              type="text"
+              class="field-textarea"
+              style="height:34px;"
+              placeholder="gpt-5.1-thinking"
+            />
+
+            <label for="issue-subject" class="field-label">Subject ID (opcional)</label>
+            <input
+              id="issue-subject"
+              type="text"
+              class="field-textarea"
+              style="height:34px;"
+              placeholder="user-123, candidato-456..."
+            />
+
+            <label for="issue-prompt" class="field-label">Prompt maestro (texto exacto)</label>
+            <textarea
+              id="issue-prompt"
+              class="field-textarea"
+              rows="10"
+              spellcheck="false"
+            ></textarea>
+
+            <label for="issue-response" class="field-label">Respuesta completa de la IA</label>
+            <textarea
+              id="issue-response"
+              class="field-textarea"
+              rows="14"
+              spellcheck="false"
+            ></textarea>
+
+            <div class="form-actions">
+              <button id="issue-btn" class="btn btn-primary">Generar IA-HASH</button>
+              <button type="button" id="issue-clear-btn" class="btn btn-ghost">Limpiar</button>
+            </div>
+          </div>
+
+          <div
+            id="issue-result"
+            class="verify-result verify-result--idle"
+            style="margin-top:14px; display:none;"
+          >
+            <div class="verify-badge">
+              <span class="badge-dot"></span>
+              <span id="issue-title">Listo para emitir.</span>
+            </div>
+            <p id="issue-message" class="result-message">
+              Pega datos y haz clic en “Generar IA-HASH”.
+            </p>
+            <details class="result-details">
+              <summary>Documento IA-HASH</summary>
+              <pre id="issue-json-output" class="result-raw">(vacío)</pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS / USE CASES / DOCS (placeholder ligero para ahora) -->
+    <section id="docs" class="section">
+      <div class="container">
+        <h2>How it works</h2>
+        <p class="section-lead">
+          Resumen rápido del protocolo mínimo IA-HASH v1: normalizar → hashear → combinar → firmar → verificar.
+        </p>
+        <ol class="hero-list">
+          <li>1. Normalizar prompt y respuesta (saltos de línea y espacios finales).</li>
+          <li>2. Hash de cada parte con SHA256 → <code>h_prompt</code> y <code>h_respuesta</code>.</li>
+          <li>3. Combinar versión, prompt_id, hashes, modelo y timestamp → <code>h_total</code>.</li>
+          <li>4. Firmar <code>h_total</code> con Ed25519 → <code>firma_total</code>.</li>
+          <li>5. Verificar recalculando todo con la clave pública.</li>
+        </ol>
+      </div>
+      <div class="container" style="margin-top:24px;">
+        <h3>Docs / Help</h3>
+        <p class="section-lead">
+          Muy pronto: protocolo completo, API y ejemplos de integración listos para copiar.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-left">
+        <span class="brand-text">IA-HASH</span>
+        <span class="footer-divider">·</span>
+        <span>Prompt + Respuesta verificables · SHA256 + Ed25519 · Neutral, offline-first.</span>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/IAHASH/iahash" target="_blank" rel="noreferrer">
+          GitHub
+        </a>
+        <span class="footer-divider">·</span>
+        <span>Apache-2.0</span>
       </div>
     </div>
-    <div class="card">
-      <h3>Prompts destacados</h3>
-      <ul class="muted">
-        {% for prompt in prompts[:3] %}
-          <li><a href="/prompts/{{ prompt.slug }}">{{ prompt.title }}</a> — {{ prompt.category }}</li>
-        {% endfor %}
-      </ul>
-      <a href="/prompts" class="button secondary">Ver todos</a>
-    </div>
-    <div class="card">
-      <h3>Secuencias</h3>
-      <ul class="muted">
-        {% for sequence in sequences[:3] %}
-          <li><a href="/sequences/{{ sequence.slug }}">{{ sequence.title }}</a></li>
-        {% endfor %}
-      </ul>
-      <a href="/sequences" class="button secondary">Explorar</a>
-    </div>
-  </div>
-{% endblock %}
+  </footer>
+
+  <script>
+    (function () {
+      /* ----------------- VERIFICACIÓN EXISTENTE ----------------- */
+
+      const form = document.getElementById("verify-form");
+      const input = document.getElementById("iah-json-input");
+      const clearBtn = document.getElementById("clear-btn");
+
+      const resultBox = document.getElementById("result");
+      const resultTitle = document.getElementById("result-title");
+      const resultMessage = document.getElementById("result-message");
+      const resultRaw = document.getElementById("result-raw");
+      const resultBadge = document.getElementById("result-badge");
+
+      function setStateIdle() {
+        resultBox.style.display = "none";
+        resultBox.className = "verify-result verify-result--idle";
+        resultTitle.textContent = "Listo para verificar.";
+        resultMessage.textContent =
+          "Pega un documento IA-HASH JSON y pulsa “Verificar IA-HASH”.";
+        resultRaw.textContent = "(sin datos)";
+      }
+
+      function setStateLoading() {
+        resultBox.style.display = "block";
+        resultBox.className = "verify-result verify-result--loading";
+        resultTitle.textContent = "Verificando…";
+        resultMessage.textContent = "Recalculando hashes y firma.";
+        resultRaw.textContent = "(esperando respuesta del servidor)";
+      }
+
+      function setStateError(msg) {
+        resultBox.style.display = "block";
+        resultBox.className = "verify-result verify-result--error";
+        resultTitle.textContent = "Error de verificación";
+        resultMessage.textContent = msg;
+      }
+
+      function setStateSuccess(isValid, data) {
+        resultBox.style.display = "block";
+        if (isValid) {
+          resultBox.className = "verify-result verify-result--ok";
+          resultTitle.textContent = "IA-HASH VERIFIED";
+          resultMessage.textContent =
+            "Documento IA-HASH válido. Hashes y firma coinciden.";
+        } else {
+          resultBox.className = "verify-result verify-result--fail";
+          resultTitle.textContent = "NO VERIFICADO";
+          resultMessage.textContent =
+            "Hash o firma no coinciden. El documento no es auténtico.";
+        }
+
+        try {
+          resultRaw.textContent = JSON.stringify(data, null, 2);
+        } catch {
+          resultRaw.textContent = String(data);
+        }
+      }
+
+      form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        let doc;
+        try {
+          doc = JSON.parse(input.value);
+        } catch (err) {
+          setStateError("JSON inválido.");
+          resultRaw.textContent = String(err);
+          return;
+        }
+
+        setStateLoading();
+
+        try {
+          const res = await fetch("/verify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(doc),
+          });
+
+          const data = await res.json();
+          const isValid =
+            data.valid === true ||
+            data.status === "valid" ||
+            data.verified === true;
+
+          setStateSuccess(Boolean(isValid), data);
+        } catch (err) {
+          setStateError("Error de red o servidor.");
+          resultRaw.textContent = String(err);
+        }
+      });
+
+      clearBtn.addEventListener("click", function () {
+        input.value = "";
+        setStateIdle();
+      });
+
+      setStateIdle();
+
+      /* --------------- EMISIÓN IA-HASH (PROMPT + RESPUESTA) --------------- */
+
+      const issueBtn = document.getElementById("issue-btn");
+      const issueClear = document.getElementById("issue-clear-btn");
+      const issueResult = document.getElementById("issue-result");
+      const issueMessage = document.getElementById("issue-message");
+      const issueTitle = document.getElementById("issue-title");
+      const issueOutput = document.getElementById("issue-json-output");
+
+      issueBtn.addEventListener("click", async () => {
+        const prompt = document.getElementById("issue-prompt").value.trim();
+        const response = document.getElementById("issue-response").value.trim();
+        const model = document.getElementById("issue-model").value.trim();
+        const subject = document.getElementById("issue-subject").value.trim();
+
+        if (!prompt || !response) {
+          issueResult.style.display = "block";
+          issueResult.className = "verify-result verify-result--error";
+          issueTitle.textContent = "Faltan datos";
+          issueMessage.textContent =
+            "Prompt y respuesta son obligatorios para emitir IA-HASH.";
+          issueOutput.textContent = "";
+          return;
+        }
+
+        issueResult.style.display = "block";
+        issueResult.className = "verify-result verify-result--loading";
+        issueTitle.textContent = "Emitiendo IA-HASH…";
+        issueMessage.textContent = "Contactando con el endpoint /issue.";
+        issueOutput.textContent = "(esperando respuesta)";
+
+        try {
+          const res = await fetch("/issue", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt_maestro: prompt,
+              respuesta: response,
+              modelo: model || "unknown",
+              subject_id: subject || null
+            }),
+          });
+
+          const data = await res.json();
+
+          issueResult.className = "verify-result verify-result--ok";
+          issueTitle.textContent = "IA-HASH emitido ✔";
+          issueMessage.textContent = "Copia y guarda el JSON IA-HASH.";
+          issueOutput.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          issueResult.className = "verify-result verify-result--error";
+          issueTitle.textContent = "Error";
+          issueMessage.textContent = "No se pudo emitir el documento IA-HASH.";
+          issueOutput.textContent = String(err);
+        }
+      });
+
+      issueClear.addEventListener("click", () => {
+        document.getElementById("issue-prompt").value = "";
+        document.getElementById("issue-response").value = "";
+        document.getElementById("issue-model").value = "";
+        document.getElementById("issue-subject").value = "";
+        issueResult.style.display = "none";
+      });
+    })();
+  </script>
+</body>
+</html>
