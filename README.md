@@ -19,51 +19,59 @@ Se puede integrar fácilmente en cualquier pipeline de generación o consulta, y
 
 ```json
 {
+  "protocol_version": "IAHASH-1.2",
   "iah_id": "...",
   "timestamp": "...",
   "prompt_id": "...",
-  "type": "pair|conversation",
+  "type": "PAIR | CONVERSATION",
+  "mode": "LOCAL | TRUSTED_URL",
   "h_prompt": "...",
   "h_response": "...",
   "h_total": "...",
   "model": "gpt-4",
-  "protocol_version": "1.2",
-  "issuer_id": "IAHASH:001",
-  "issuer_pk_url": "/keys/issuer_ed25519.pub",
+  "issuer_id": "iahash.local",
+  "issuer_pk_url": "http://localhost:8000/keys/issuer_ed25519.pub",
   "signature": "...",
   "prompt_hmac_verified": true,
   "subject_id": "...",
   "conversation_url": "...",
   "provider": "OpenAI",
-  "store_raw": true,
-  "raw_prompt_text": "...",
-  "raw_response_text": "...",
-  "raw_context_text": "..."
+  "store_raw": false,
+  "raw_prompt_text": null,
+  "raw_response_text": null
 }
 ```
 
-* Hashes SHA256 normalizados.
-* Firma Ed25519 de `h_total` y metadatos.
-* Verificación offline o via endpoint `/api/check`.
+* Hashes SHA256 normalizados (`h_prompt`, `h_response`, `h_total`).
+* Firma Ed25519 de `h_total` y metadatos con la clave privada local.
+* Verificación offline o vía endpoint `/api/check`.
+* `prompt_hmac_verified` indica que el documento referencia un `prompt_id` registrado; el HMAC real se delega a la tabla `prompts`.
+* `store_raw` determina si los textos planos se conservan en base de datos; por defecto son `null` para proteger privacidad.
 
 ## 🏗️ Arquitectura del Sistema
 
 ```
-[User] → [Web UI] → [FastAPI Backend] → [SQLite + Claves] → [Signed JSON]
-                                 ↓
-                           [API pública REST]
+[User] → [Web UI (Jinja)] → [FastAPI Backend]
+                        ↘
+           [Extractores (ChatGPT share)]
+                          ↓
+                 [issuer.py / verifier.py]
+                          ↓
+               [SQLite (db/schema.sql)]
+                          ↓
+                [JSON firmado + clave pública]
 ```
 
-* Backend: `FastAPI`, firmado en tiempo real vía `issuer.py`
-* Frontend: HTML/CSS simple (`web/`)
-* Base de datos: SQLite (`db/`)
-* Claves: Ed25519, en `/data/keys/`
-* Stateless: Todo el documento es autosuficiente y portable
+* Backend: `FastAPI` (API + vistas HTML), firmado en tiempo real vía `issuer.py`.
+* Frontend: plantillas Jinja y estáticos en `web/templates` y `web/static`.
+* Base de datos: SQLite (`db/schema.sql`, auto-init en startup) gestionada por `iahash/db.py`.
+* Claves: Ed25519 en `/data/keys/issuer_ed25519.private|pub`, generadas por `start.sh` si no existen.
+* Stateless: el documento firmado es autosuficiente; la BD solo almacena histórico y prompts.
 
 ## 🔁 Flujo de Emisión
 
 1. Usuario genera texto con IA
-2. App llama a `/api/verify/pair` o `/verify/conversation`
+2. App llama a `/api/verify/pair` o `/api/verify/conversation`
 3. Se calculan hashes de entrada y salida
 4. Se construye documento IA-HASH completo
 5. Se firma y se almacena (opcional)
@@ -84,15 +92,20 @@ Se puede integrar fácilmente en cualquier pipeline de generación o consulta, y
 ## 🌐 API (Endpoints)
 
 ```http
-GET    /api            → Info general
-GET    /health         → Healthcheck
-POST   /api/verify/pair → Genera documento (pair)
-POST   /api/verify/conversation → Genera documento (URL)
-POST   /api/check      → Verifica documento
-GET    /prompts        → Lista de prompts
-GET    /sequences      → Lista de secuencias
-GET    /iah/{id}       → Consulta un documento
-GET    /public-key     → Clave pública en JSON
+GET    /                → Web (index)
+GET    /api             → Info general
+GET    /health          → Healthcheck
+POST   /api/verify/pair → Genera IA-HASH (prompt + respuesta local)
+POST   /api/verify/conversation → Genera IA-HASH desde URL de conversación (ChatGPT share)
+POST   /api/check       → Verifica un documento IA-HASH existente
+GET    /verify          → UI de emisión/verificación manual
+GET    /compare         → UI de comparación
+GET    /prompts         → Lista de prompts (HTML)
+GET    /prompts/{slug}  → Detalle de prompt (HTML)
+GET    /sequences       → Lista de secuencias (HTML)
+GET    /sequences/{slug}→ Detalle de secuencia (HTML)
+GET    /iah/{id}        → Consulta un documento emitido (HTML)
+GET    /public-key      → Clave pública en JSON
 GET    /keys/issuer_ed25519.pub → Clave pública PEM
 ```
 
@@ -100,16 +113,16 @@ GET    /keys/issuer_ed25519.pub → Clave pública PEM
 
 Esquema SQLite (`schema.sql`) contiene:
 
-* `prompts`: prompts base con HMAC opcional
-* `iahash_documents`: documentos emitidos (campos JSON completos)
-* `sequences`: flujos guiados de verificación
+* `prompts`: prompts base con HMAC opcional y slug público.
+* `iahash_documents`: documentos emitidos (JSON completo; `raw_*` solo si `store_raw=1`).
+* `sequences` y `sequence_steps`: flujos guiados y sus pasos.
 
-Todos los accesos se hacen vía `db.py` con columnas tolerantes a versiones.
+La inicialización es automática en arranque (`ensure_db_initialized`), apuntando por defecto a `db/iahash.db`.
 
 ## 🔐 Seguridad: Claves, Hashes, Firmas
 
-* Firmas Ed25519 con clave privada generada en arranque (`/data/keys/issuer_ed25519.key`)
-* Verificación con clave pública (`issuer_ed25519.pub`)
+* Firmas Ed25519 con clave privada generada en arranque (`/data/keys/issuer_ed25519.private`).
+* Verificación con clave pública (`/data/keys/issuer_ed25519.pub` o `/public-key`).
 * SHA256 para todos los textos
 * Documentos firmados incluyen metainformación del firmante
 
@@ -118,6 +131,9 @@ Todos los accesos se hacen vía `db.py` con columnas tolerantes a versiones.
 Frontend muy simple:
 
 * `index.html` → bienvenida e info
+* `verify.html` → emisión/validación manual
+* `compare.html` → comparación de IA-HASH
+* `prompts.html`, `prompt_detail.html`, `sequences.html`, `sequence_detail.html`, `docs.html` → navegación de contenidos
 * `styles.css` → estilo
 * `logo.png` → marca
 
@@ -166,8 +182,10 @@ Próximas mejoras:
 ```json
 {
   "iah_id": "IAH:20251205:XYZ123",
-  "type": "pair",
-  "model": "gpt-4",
+  "protocol_version": "IAHASH-1.2",
+  "type": "PAIR",
+  "mode": "LOCAL",
+  "model": "gpt-4.1",
   "h_prompt": "...",
   "h_response": "...",
   "h_total": "...",
