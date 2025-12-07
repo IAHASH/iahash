@@ -1,56 +1,155 @@
 {% extends "base.html" %}
+{% block title %}IA-HASH · Verificar{% endblock %}
 {% block content %}
   <div class="section">
-    <h2>Verify</h2>
-    <p class="muted">Tres modos: par de textos, conversación compartida y checker IA-HASH.</p>
+    <p class="pill">Verificación IA-HASH</p>
+    <h2>Pair, Prompt+URL y Checker</h2>
+    <p class="muted">Elige el flujo adecuado para generar o validar artefactos IA-HASH.</p>
   </div>
+
   <div class="tabs">
-    <div class="tab active" onclick="showTab('pair')">Pair</div>
-    <div class="tab" onclick="showTab('conversation')">Prompt + URL</div>
-    <div class="tab" onclick="showTab('checker')">Checker</div>
+    <button class="tab active" data-target="pair" onclick="showTab('pair')">Pair</button>
+    <button class="tab" data-target="prompt-url" onclick="showTab('prompt-url')">Prompt+URL</button>
+    <button class="tab" data-target="checker" onclick="showTab('checker')">Checker</button>
   </div>
 
-  <div id="tab-pair" class="card">
-    <h3>Pair verification</h3>
-    <textarea id="pair-prompt" placeholder="Prompt text" class="input"></textarea>
-    <textarea id="pair-response" placeholder="Response text" class="input" style="margin-top: 10px;"></textarea>
-    <div class="flex" style="margin-top: 10px;">
-      <select id="pair-model" class="input">
-        <option value="gpt-4o">gpt-4o</option>
-        <option value="claude-3-opus">claude-3-opus</option>
-        <option value="unknown" selected>unknown</option>
-      </select>
-      <button class="button" onclick="submitPair()">Generate</button>
+  <div class="tab-content" id="tab-pair">
+    <div class="card">
+      <div class="section-header">
+        <div>
+          <div class="badge">Pair</div>
+          <h3>Prompt + Respuesta</h3>
+          <p class="muted">Genera un IA-HASH con el texto exacto enviado a la IA y su salida.</p>
+        </div>
+      </div>
+      <form class="form-grid" id="pair-form">
+        <label class="field-block">
+          <span class="field-label">Prompt</span>
+          <textarea id="pair-prompt" class="input" rows="6" placeholder="Pega aquí el prompt exacto"></textarea>
+        </label>
+        <label class="field-block">
+          <span class="field-label">Respuesta</span>
+          <textarea id="pair-response" class="input" rows="8" placeholder="Respuesta completa de la IA"></textarea>
+        </label>
+        <div class="field-row">
+          <label class="field-block">
+            <span class="field-label">Modelo</span>
+            <select id="pair-model" class="input">
+              <option value="unknown" selected>unknown</option>
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="claude-3-opus">claude-3-opus</option>
+            </select>
+          </label>
+          <div class="field-block">
+            <span class="field-label">&nbsp;</span>
+            <button class="button" type="submit">Generar IA-HASH</button>
+          </div>
+        </div>
+        <pre id="pair-log" class="muted result-raw"></pre>
+      </form>
     </div>
-    <pre id="pair-log" class="muted"></pre>
   </div>
 
-  <div id="tab-conversation" class="card" style="display:none;">
-    <h3>Conversation verification</h3>
-    <select id="prompt-slug" class="input">
-      <option value="">(opcional) Selecciona prompt maestro</option>
-      {% for prompt in prompts %}
-        <!-- IMPORTANTE: aquí usamos prompt.id, no el slug -->
-        <option value="{{ prompt.id }}">{{ prompt.title }}</option>
-      {% endfor %}
-    </select>
-    <input id="conv-url" class="input" placeholder="https://chatgpt.com/share/." style="margin-top: 10px;">
-    <div class="flex" style="margin-top: 10px; gap: 10px;">
-      <input id="conv-model" class="input" placeholder="Modelo (opcional)" value="unknown">
-      <select id="conv-provider" class="input">
-        <option value="chatgpt" selected>chatgpt</option>
-        <option value="unknown">unknown</option>
-      </select>
+  <div class="tab-content" id="tab-prompt-url" style="display:none;">
+    <div class="card">
+      <div class="section-header">
+        <div>
+          <div class="badge">Prompt+URL</div>
+          <h3>Conversación compartida</h3>
+          <p class="muted">Selecciona un prompt maestro y pega el enlace del chat a verificar.</p>
+        </div>
+      </div>
+      <form class="form-grid" id="conversation-form">
+        <label class="field-block">
+          <span class="field-label">Prompt maestro</span>
+          <select id="prompt-slug" class="input">
+            <option value="">(opcional) Selecciona prompt maestro</option>
+            {% for prompt in prompts %}
+              <option value="{{ prompt.id }}">{{ prompt.title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field-block">
+          <span class="field-label">URL del chat</span>
+          <input id="conv-url" class="input" placeholder="https://chat.openai.com/share/..." />
+        </label>
+        <div class="field-row">
+          <label class="field-block">
+            <span class="field-label">Modelo</span>
+            <input id="conv-model" class="input" placeholder="unknown" value="unknown" />
+          </label>
+          <label class="field-block">
+            <span class="field-label">Proveedor</span>
+            <select id="conv-provider" class="input">
+              <option value="chatgpt" selected>chatgpt</option>
+              <option value="unknown">unknown</option>
+            </select>
+          </label>
+          <div class="field-block">
+            <span class="field-label">&nbsp;</span>
+            <button class="button" type="submit">Generar IA-HASH</button>
+          </div>
+        </div>
+        <pre id="conv-log" class="muted result-raw"></pre>
+      </form>
     </div>
-    <button class="button" style="margin-top: 10px;" onclick="submitConversation()">Verificar conversación</button>
-    <pre id="conv-log" class="muted"></pre>
   </div>
 
-  <div id="tab-checker" class="card" style="display:none;">
-    <h3>Checker</h3>
-    <textarea id="checker-json" class="input" placeholder='Pega documento IA-HASH JSON'></textarea>
-    <button class="button" style="margin-top: 10px;" onclick="submitChecker()">Validar</button>
-    <pre id="checker-log" class="muted"></pre>
+  <div class="tab-content" id="tab-checker" style="display:none;">
+    <div class="card">
+      <div class="section-header">
+        <div>
+          <div class="badge">Checker</div>
+          <h3>Valida un JSON IA-HASH</h3>
+          <p class="muted">Pega el documento generado y confirma la integridad de hashes y firma.</p>
+        </div>
+      </div>
+      <form class="form-grid" id="checker-form">
+        <label class="field-block">
+          <span class="field-label">IA-HASH JSON</span>
+          <textarea id="checker-json" class="input" rows="10" placeholder='{"iah_id":"...","h_total":"..."}'></textarea>
+        </label>
+        <div class="field-row">
+          <div class="field-block">
+            <span class="field-label">&nbsp;</span>
+            <button class="button" type="submit">Verificar</button>
+          </div>
+        </div>
+        <pre id="checker-log" class="muted result-raw"></pre>
+      </form>
+    </div>
+  </div>
+
+  <div class="result-card" id="result-card" style="display:none;">
+    <div class="result-card__head">
+      <div>
+        <p class="muted">Resultado IA-HASH</p>
+        <h3 id="result-iah-id">—</h3>
+      </div>
+      <span class="badge" id="result-status">Pendiente</span>
+    </div>
+    <div class="result-grid">
+      <div>
+        <p class="muted label">h_prompt</p>
+        <p id="result-hash-prompt" class="mono">—</p>
+      </div>
+      <div>
+        <p class="muted label">h_response</p>
+        <p id="result-hash-response" class="mono">—</p>
+      </div>
+      <div>
+        <p class="muted label">h_total</p>
+        <p id="result-hash-total" class="mono">—</p>
+      </div>
+      <div>
+        <p class="muted label">Firma</p>
+        <p id="result-signature" class="mono">—</p>
+      </div>
+    </div>
+    <details class="result-details">
+      <summary>Ver JSON completo</summary>
+      <pre id="result-raw" class="result-raw muted">(sin datos)</pre>
+    </details>
   </div>
 
   <script src="/static/js/verify.js"></script>
