@@ -113,5 +113,8 @@ CREATE INDEX IF NOT EXISTS idx_iah_documents_iah_id
 CREATE INDEX IF NOT EXISTS idx_iah_documents_prompt_id
     ON iahash_documents(prompt_id);
 
+CREATE INDEX IF NOT EXISTS idx_iah_documents_created_at
+    ON iahash_documents(created_at);
+
 CREATE INDEX IF NOT EXISTS idx_sequence_steps_sequence_id
     ON sequence_steps(sequence_id);

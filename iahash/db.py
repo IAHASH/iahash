@@ -18,9 +18,11 @@ logger = logging.getLogger(__name__)
 
 def ensure_db_initialized() -> None:
     """
-    Si no existe la base de datos, crea el fichero y aplica:
-      - schema.sql
-      - seed_prompts.sql (si existe)
+    Garantiza que la base de datos existe y está actualizada:
+
+      - Si falta, se crea aplicando schema.sql.
+      - Si ya existe, aplica migraciones ligeras para columnas/índices nuevos.
+      - Siempre carga seed_prompts.sql si existe y la tabla prompts está vacía.
 
     Ojo: start.sh ya hace esto también en el arranque del contenedor.
     Aquí es solo una red de seguridad para ejecuciones fuera de Docker.
@@ -29,42 +31,40 @@ def ensure_db_initialized() -> None:
 
     needs_bootstrap = not DB_PATH.exists() or DB_PATH.stat().st_size == 0
 
-    if not needs_bootstrap:
-        try:
-            conn = sqlite3.connect(str(DB_PATH))
-            cur = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
-            existing_tables = {row[0] for row in cur.fetchall()}
-            needs_bootstrap = not {"prompts", "iahash_documents"}.issubset(
-                existing_tables
-            )
-        except Exception:
-            needs_bootstrap = True
-        finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
-
-    if not needs_bootstrap:
-        return
-
-    if DB_PATH.exists():
-        DB_PATH.unlink(missing_ok=True)
-
     if not SCHEMA_PATH.exists():
         raise FileNotFoundError(f"Schema file missing: {SCHEMA_PATH}")
 
+    conn: Optional[sqlite3.Connection] = None
+
     try:
-        conn = sqlite3.connect(str(DB_PATH))
-        try:
-            conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-            if SEED_PATH.exists():
-                conn.executescript(SEED_PATH.read_text(encoding="utf-8"))
-            conn.commit()
-        finally:
+        if needs_bootstrap:
+            conn = sqlite3.connect(str(DB_PATH))
+        else:
+            try:
+                conn = sqlite3.connect(str(DB_PATH))
+                cur = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+                existing_tables = {row[0] for row in cur.fetchall()}
+                needs_bootstrap = not {"prompts", "iahash_documents"}.issubset(
+                    existing_tables
+                )
+            except Exception:
+                if conn:
+                    conn.close()
+                raise
+
+        if needs_bootstrap and DB_PATH.exists():
             conn.close()
+            DB_PATH.unlink(missing_ok=True)
+            conn = sqlite3.connect(str(DB_PATH))
+
+        if conn is None:
+            raise RuntimeError("Database connection could not be established")
+
+        _apply_schema(conn, bootstrap=needs_bootstrap)
+        _load_seed_data(conn)
+        conn.commit()
     except Exception as exc:
         logger.exception("Failed to initialize database at %s", DB_PATH)
         if DB_PATH.exists():
@@ -73,6 +73,12 @@ def ensure_db_initialized() -> None:
             except OSError:
                 logger.warning("Could not clean up partial database at %s", DB_PATH)
         raise RuntimeError("Failed to initialize database") from exc
+    finally:
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
 
 
 def get_connection() -> sqlite3.Connection:
@@ -134,6 +140,53 @@ def _get_table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {row["name"] for row in cur.fetchall()}
 
 
+def _apply_schema(conn: sqlite3.Connection, *, bootstrap: bool) -> None:
+    """Aplica el schema inicial o actualizaciones incrementales."""
+    schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
+
+    if bootstrap:
+        conn.executescript(schema_sql)
+        return
+
+    # Actualizaciones mínimas para entornos con schema antiguo
+    cols = _get_table_columns(conn, "iahash_documents")
+    if "raw_context_text" not in cols:
+        conn.execute("ALTER TABLE iahash_documents ADD COLUMN raw_context_text TEXT")
+    if "json_document" not in cols:
+        conn.execute("ALTER TABLE iahash_documents ADD COLUMN json_document TEXT")
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_iah_documents_iah_id"
+        " ON iahash_documents(iah_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_iah_documents_prompt_id"
+        " ON iahash_documents(prompt_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_iah_documents_created_at"
+        " ON iahash_documents(created_at)"
+    )
+
+
+def _load_seed_data(conn: sqlite3.Connection) -> None:
+    """Carga seed_prompts.sql si existe y aún no hay prompts."""
+    if not SEED_PATH.exists():
+        return
+
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM prompts")
+        prompt_count = cur.fetchone()[0]
+    except sqlite3.Error:
+        logger.warning("Unable to count prompts; skipping seed data load")
+        return
+
+    if prompt_count:
+        return
+
+    conn.executescript(SEED_PATH.read_text(encoding="utf-8"))
+
+
 def store_iah_document(document: Dict[str, Any]) -> None:
     """
     Inserta un documento IA-HASH en iahash_documents.
@@ -192,7 +245,11 @@ def store_iah_document(document: Dict[str, Any]) -> None:
                 else None
             ),
             # campos nuevos del schema v1.2 opción B
-            "raw_context_text": document.get("raw_context_text"),
+            "raw_context_text": (
+                document.get("raw_context_text")
+                if document.get("store_raw")
+                else None
+            ),
             "json_document": json_doc,
         }
 
