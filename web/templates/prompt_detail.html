@@ -14,7 +14,15 @@
   <div class="card">
     <h3>Verificar respuesta (ChatGPT link)</h3>
     <input id="conv-url" class="input" placeholder="https://chatgpt.com/share/..." style="margin-top: 10px;">
-    
+
+    <div class="flex" style="margin-top: 10px; gap: 10px;">
+      <input id="conv-model" class="input" placeholder="Modelo (opcional)" value="unknown">
+      <select id="conv-provider" class="input">
+        <option value="chatgpt" selected>chatgpt</option>
+        <option value="unknown">unknown</option>
+      </select>
+    </div>
+
     <!-- IMPORTANTE: ahora enviamos prompt.id, NO el slug -->
     <button class="button" style="margin-top: 10px;" onclick="verifyConversation({{ prompt.id }})">
       Verificar con IA-HASH
@@ -28,31 +36,6 @@
     <p class="muted">Próximamente: aquí aparecerán los últimos IA-HASH emitidos para este prompt.</p>
   </div>
 
-  <script>
-    function copyPrompt() {
-      const text = document.getElementById('prompt-text').value;
-      navigator.clipboard.writeText(text);
-      alert('Prompt copiado al portapapeles.');
-    }
-
-    async function verifyConversation(promptId) {
-      const url = document.getElementById('conv-url').value;
-      const payload = {
-        url: url,
-        prompt_id: promptId  // IMPORTANTE: numeric id
-      };
-
-      document.getElementById('conv-log').textContent = "Procesando verificación...";
-
-      const res = await fetch('/api/verify/conversation', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-
-      const json = await res.json();
-      document.getElementById('conv-log').textContent = JSON.stringify(json, null, 2);
-    }
-  </script>
+  <script src="/static/js/prompt_detail.js"></script>
 
 {% endblock %}

@@ -26,8 +26,32 @@ def ensure_db_initialized() -> None:
     Aquí es solo una red de seguridad para ejecuciones fuera de Docker.
     """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if DB_PATH.exists():
+
+    needs_bootstrap = not DB_PATH.exists() or DB_PATH.stat().st_size == 0
+
+    if not needs_bootstrap:
+        try:
+            conn = sqlite3.connect(str(DB_PATH))
+            cur = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+            existing_tables = {row[0] for row in cur.fetchall()}
+            needs_bootstrap = not {"prompts", "iahash_documents"}.issubset(
+                existing_tables
+            )
+        except Exception:
+            needs_bootstrap = True
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    if not needs_bootstrap:
         return
+
+    if DB_PATH.exists():
+        DB_PATH.unlink(missing_ok=True)
 
     if not SCHEMA_PATH.exists():
         raise FileNotFoundError(f"Schema file missing: {SCHEMA_PATH}")
