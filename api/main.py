@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     HTMLResponse,
@@ -11,6 +11,7 @@ from fastapi.responses import (
     FileResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from iahash.issuer import issue_pair, issue_conversation, PROTOCOL_VERSION
@@ -36,8 +37,11 @@ API_VERSION = "1.2.0"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = BASE_DIR / "web"
+TEMPLATES_DIR = WEB_DIR / "templates"
 KEYS_DIR = Path("/data/keys")
 PUBLIC_KEY_PATH = KEYS_DIR / "issuer_ed25519.pub"
+
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 # ---------------------------------------------------------------------------
@@ -56,12 +60,12 @@ class PairIssueRequest(BaseModel):
 
 
 class ConversationIssueRequest(BaseModel):
-    prompt_text: str
-    response_text: str
-    prompt_id: str
-    model: str
+    prompt_text: Optional[str] = None
+    response_text: Optional[str] = None
+    prompt_id: Optional[str] = None
+    model: str = "unknown"
     conversation_url: str
-    provider: str
+    provider: Optional[str] = None
     issuer_id: Optional[str] = None
     issuer_pk_url: Optional[str] = None
     subject_id: Optional[str] = None
@@ -110,16 +114,15 @@ if static_dir.exists():
 # ---------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def root() -> HTMLResponse:
+def root(request: Request) -> HTMLResponse:
     """
     Página principal de IA-HASH.
 
     Sirve web/index.html. Si por lo que sea no existe,
     devolvemos la info JSON de la API como fallback.
     """
-    index_path = WEB_DIR / "index.html"
-    if index_path.exists():
-        return HTMLResponse(index_path.read_text(encoding="utf-8"))
+    if (TEMPLATES_DIR / "index.html").exists():
+        return templates.TemplateResponse("index.html", {"request": request})
     # Fallback: igual que /api
     return JSONResponse(api_info())
 
@@ -194,17 +197,20 @@ def api_verify_pair(payload: PairIssueRequest) -> Dict[str, Any]:
     """
     Genera un documento IA-HASH para un par prompt + respuesta local.
     """
-    doc = issue_pair(
-        prompt_text=payload.prompt_text,
-        response_text=payload.response_text,
-        prompt_id=payload.prompt_id,
-        model=payload.model,
-        issuer_id=payload.issuer_id,
-        issuer_pk_url=payload.issuer_pk_url,
-        subject_id=payload.subject_id,
-        store_raw=payload.store_raw,
-    )
-    return doc
+    try:
+        doc = issue_pair(
+            prompt_text=payload.prompt_text,
+            response_text=payload.response_text,
+            prompt_id=payload.prompt_id,
+            model=payload.model,
+            issuer_id=payload.issuer_id,
+            issuer_pk_url=payload.issuer_pk_url,
+            subject_id=payload.subject_id,
+            store_raw=payload.store_raw,
+        )
+        return doc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/verify/conversation", response_class=JSONResponse)
@@ -225,27 +231,44 @@ def api_verify_conversation(payload: ConversationIssueRequest) -> Dict[str, Any]
             detail = "Unknown extraction error"
         raise HTTPException(status_code=400, detail=detail)
 
-    if (
-        extracted["prompt_text"] != payload.prompt_text
-        or extracted["response_text"] != payload.response_text
-    ):
-        raise HTTPException(
-            status_code=400, detail="Extracted conversation does not match payload"
-        )
+    prompt_text = extracted.get("prompt_text")
+    response_text = extracted.get("response_text")
 
-    doc = issue_conversation(
-        prompt_text=extracted["prompt_text"],
-        response_text=extracted["response_text"],
-        prompt_id=payload.prompt_id,
-        model=extracted.get("model") or payload.model,
-        conversation_url=payload.conversation_url,
-        provider=extracted.get("provider") or payload.provider,
-        issuer_id=payload.issuer_id,
-        issuer_pk_url=payload.issuer_pk_url,
-        subject_id=payload.subject_id,
-        store_raw=payload.store_raw,
-    )
-    return doc
+    if not prompt_text or not response_text:
+        raise HTTPException(status_code=400, detail="Conversation content unavailable")
+
+    if payload.prompt_text:
+        if extracted["prompt_text"] != payload.prompt_text:
+            raise HTTPException(
+                status_code=400,
+                detail="Extracted prompt does not match payload",
+            )
+        prompt_text = payload.prompt_text
+
+    if payload.response_text:
+        if extracted["response_text"] != payload.response_text:
+            raise HTTPException(
+                status_code=400,
+                detail="Extracted response does not match payload",
+            )
+        response_text = payload.response_text
+
+    try:
+        doc = issue_conversation(
+            prompt_text=prompt_text,
+            response_text=response_text,
+            prompt_id=payload.prompt_id,
+            model=extracted.get("model") or payload.model or "unknown",
+            conversation_url=payload.conversation_url,
+            provider=extracted.get("provider") or payload.provider or "unknown",
+            issuer_id=payload.issuer_id,
+            issuer_pk_url=payload.issuer_pk_url,
+            subject_id=payload.subject_id,
+            store_raw=payload.store_raw,
+        )
+        return doc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/check", response_class=JSONResponse)
@@ -260,46 +283,73 @@ def api_check(payload: CheckRequest) -> Dict[str, Any]:
     }
 
 
+@app.get("/verify", response_class=HTMLResponse)
+def web_verify(request: Request) -> HTMLResponse:
+    prompts = list_prompts()
+    return templates.TemplateResponse(
+        "verify.html", {"request": request, "prompts": prompts}
+    )
+
+
+@app.get("/compare", response_class=HTMLResponse)
+def web_compare(request: Request) -> HTMLResponse:
+    prompts = list_prompts()
+    return templates.TemplateResponse(
+        "compare.html", {"request": request, "prompts": prompts}
+    )
+
+
 # ---------------------------------------------------------------------------
 # Prompts & secuencias
 # ---------------------------------------------------------------------------
 
-@app.get("/prompts", response_class=JSONResponse)
-def api_list_prompts() -> Dict[str, Any]:
-    return {"items": list_prompts()}
+@app.get("/prompts", response_class=HTMLResponse)
+def web_list_prompts(request: Request) -> HTMLResponse:
+    prompts = list_prompts()
+    return templates.TemplateResponse(
+        "prompts.html", {"request": request, "prompts": prompts}
+    )
 
 
-@app.get("/prompts/{slug}", response_class=JSONResponse)
-def api_get_prompt(slug: str) -> Dict[str, Any]:
+@app.get("/prompts/{slug}", response_class=HTMLResponse)
+def web_get_prompt(request: Request, slug: str) -> HTMLResponse:
     prompt = get_prompt_by_slug(slug)
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
-    return prompt
+    prompt["body"] = prompt.get("full_prompt")
+    return templates.TemplateResponse(
+        "prompt_detail.html", {"request": request, "prompt": prompt}
+    )
 
 
-@app.get("/sequences", response_class=JSONResponse)
-def api_list_sequences() -> Dict[str, Any]:
-    return {"items": list_sequences()}
+@app.get("/sequences", response_class=HTMLResponse)
+def web_list_sequences(request: Request) -> HTMLResponse:
+    sequences = list_sequences()
+    return templates.TemplateResponse(
+        "sequences.html", {"request": request, "sequences": sequences}
+    )
 
 
-@app.get("/sequences/{slug}", response_class=JSONResponse)
-def api_get_sequence(slug: str) -> Dict[str, Any]:
+@app.get("/sequences/{slug}", response_class=HTMLResponse)
+def web_get_sequence(request: Request, slug: str) -> HTMLResponse:
     sequence = get_sequence_by_slug(slug)
     if not sequence:
         raise HTTPException(status_code=404, detail="Sequence not found")
-    return sequence
+    return templates.TemplateResponse(
+        "sequence_detail.html", {"request": request, "sequence": sequence}
+    )
 
 
 # ---------------------------------------------------------------------------
 # IA-HASH documents
 # ---------------------------------------------------------------------------
 
-@app.get("/iah/{iah_id}", response_class=JSONResponse)
-def api_get_iah_document(iah_id: str) -> Dict[str, Any]:
+@app.get("/iah/{iah_id}", response_class=HTMLResponse)
+def web_get_iah_document(request: Request, iah_id: str) -> HTMLResponse:
     doc = get_iah_document_by_id(iah_id)
     if not doc:
         raise HTTPException(status_code=404, detail="IA-HASH document not found")
-    return doc
+    return templates.TemplateResponse("docs.html", {"request": request, "iah": doc})
 
 
 # ---------------------------------------------------------------------------

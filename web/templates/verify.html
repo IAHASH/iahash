@@ -35,6 +35,13 @@
       {% endfor %}
     </select>
     <input id="conv-url" class="input" placeholder="https://chatgpt.com/share/." style="margin-top: 10px;">
+    <div class="flex" style="margin-top: 10px; gap: 10px;">
+      <input id="conv-model" class="input" placeholder="Modelo (opcional)" value="unknown">
+      <select id="conv-provider" class="input">
+        <option value="chatgpt" selected>chatgpt</option>
+        <option value="unknown">unknown</option>
+      </select>
+    </div>
     <button class="button" style="margin-top: 10px;" onclick="submitConversation()">Verificar conversación</button>
     <pre id="conv-log" class="muted"></pre>
   </div>
@@ -46,56 +53,5 @@
     <pre id="checker-log" class="muted"></pre>
   </div>
 
-  <script>
-    function showTab(name) {
-      ['pair','conversation','checker'].forEach(id => {
-        document.getElementById(`tab-${id}`).style.display = id === name ? 'block' : 'none';
-        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-      });
-      const tabIndex = {'pair':0,'conversation':1,'checker':2}[name];
-      document.querySelectorAll('.tab')[tabIndex].classList.add('active');
-    }
-
-    async function submitPair() {
-      const payload = {
-        prompt_text: document.getElementById('pair-prompt').value,
-        response_text: document.getElementById('pair-response').value,
-        model: document.getElementById('pair-model').value
-      };
-      const res = await fetch('/api/verify/pair', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      document.getElementById('pair-log').textContent =
-        JSON.stringify(await res.json(), null, 2);
-    }
-
-    async function submitConversation() {
-      const payload = {
-        url: document.getElementById('conv-url').value,
-        // ahora prompt_id es el ID numérico del prompt, o null si no se selecciona
-        prompt_id: document.getElementById('prompt-slug').value || null
-      };
-      const res = await fetch('/api/verify/conversation', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      document.getElementById('conv-log').textContent =
-        JSON.stringify(await res.json(), null, 2);
-    }
-
-    async function submitChecker() {
-      const raw = document.getElementById('checker-json').value;
-      const payload = { document: JSON.parse(raw) };
-      const res = await fetch('/api/check', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      document.getElementById('checker-log').textContent =
-        JSON.stringify(await res.json(), null, 2);
-    }
-  </script>
+  <script src="/static/js/verify.js"></script>
 {% endblock %}
