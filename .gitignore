@@ -6,3 +6,4 @@ keys/
 .idea/
 .vscode/
 .DS_Store
+db/iahash.db
