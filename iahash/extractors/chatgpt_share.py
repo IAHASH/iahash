@@ -163,7 +163,7 @@ def _download_share_payload(url: str, *, timeout: float = 10.0) -> Dict[str, Any
 
 
 # ---------------------------------------------------------------------------
-# 3. Generic search helpers on the backend payload
+# 3. Generic search helpers on the payload
 # ---------------------------------------------------------------------------
 
 
@@ -194,17 +194,29 @@ def _find_mapping(obj: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _collect_messages(mapping: Dict[str, Any]) -> tuple[str, str]:
-    """Return (prompt_text, response_text) from the mapping.
+def _collect_first_pair(mapping: Dict[str, Any]) -> tuple[str, str, Dict[str, Any]]:
+    """Return (prompt_text, response_text, assistant_message_metadata).
 
-    - Prompt: earliest message with role == "user"
-    - Response: latest message with role == "assistant"
+    Rules:
 
-    If `create_time` exists, it is used for ordering; otherwise
-    we fall back to iteration order.
+    - Prompt:
+      * first message with role == "user"
+      * content_type == "text"
+      * NOT metadata.is_user_system_message
+      * NOT metadata.is_visually_hidden_from_conversation
+      * with non-empty text.
+
+    - Response:
+      * first message with role == "assistant"
+      * content_type == "text"
+      * comes AFTER the chosen prompt in time/order
+      * if possible, prefer metadata.channel == "final".
+
+    This guarantees we sign the **first real instruction and its first answer**,
+    even if the user later adds more instructions or refinements.
     """
-    user_messages: list[tuple[tuple[int, float | int], str]] = []
-    assistant_messages: list[tuple[tuple[int, float | int], str]] = []
+    user_msgs: list[tuple[tuple[int, float | int], str]] = []
+    assistant_msgs: list[tuple[tuple[int, float | int], str, Dict[str, Any]]] = []
 
     for idx, node in enumerate(mapping.values()):
         if not isinstance(node, dict):
@@ -218,16 +230,21 @@ def _collect_messages(mapping: Dict[str, Any]) -> tuple[str, str]:
         role = author.get("role")
 
         content = message.get("content") or {}
+        content_type = content.get("content_type")
         parts = content.get("parts") or []
-        text_parts = [part for part in parts if isinstance(part, str)]
 
+        # Solo nos interesan mensajes de texto.
+        if content_type != "text":
+            continue
+
+        text_parts = [part for part in parts if isinstance(part, str)]
         if not text_parts:
             continue
 
         text = "\n".join(text_parts)
-        create_time = message.get("create_time")
+        metadata: Dict[str, Any] = message.get("metadata") or {}
 
-        # (0, t) when there is a numeric timestamp, (1, idx) as fallback
+        create_time = message.get("create_time")
         sort_key: tuple[int, float | int] = (
             (0, create_time)
             if isinstance(create_time, (int, float))
@@ -235,20 +252,45 @@ def _collect_messages(mapping: Dict[str, Any]) -> tuple[str, str]:
         )
 
         if role == "user":
-            user_messages.append((sort_key, text))
-        elif role == "assistant":
-            assistant_messages.append((sort_key, text))
+            # Ignorar mensajes de sistema del usuario, ocultos, etc.
+            if metadata.get("is_user_system_message"):
+                continue
+            if metadata.get("is_visually_hidden_from_conversation"):
+                continue
+            user_msgs.append((sort_key, text))
 
-    if not user_messages or not assistant_messages:
+        elif role == "assistant":
+            assistant_msgs.append((sort_key, text, metadata))
+
+    if not user_msgs or not assistant_msgs:
         raise UnsupportedProvider(
             "Could not parse ChatGPT shared conversation "
             "(missing user or assistant messages)"
         )
 
-    prompt_text = min(user_messages, key=lambda item: item[0])[1]
-    response_text = max(assistant_messages, key=lambda item: item[0])[1]
+    # Primer prompt "real"
+    prompt_sort_key, prompt_text = min(user_msgs, key=lambda item: item[0])
 
-    return prompt_text, response_text
+    # Assistants que vienen después de ese prompt.
+    candidates = [
+        (skey, text, meta)
+        for (skey, text, meta) in assistant_msgs
+        if skey >= prompt_sort_key
+    ]
+
+    if not candidates:
+        raise UnsupportedProvider(
+            "Could not find assistant response after first user prompt"
+        )
+
+    # Preferimos channel == "final", si existe.
+    final_candidates = [
+        item for item in candidates if (item[2].get("channel") == "final")
+    ]
+    pool = final_candidates or candidates
+
+    _, response_text, response_metadata = min(pool, key=lambda item: item[0])
+    return prompt_text, response_text, response_metadata
 
 
 def _find_first_value(obj: Any, keys: set[str]) -> Optional[Any]:
@@ -270,19 +312,26 @@ def _find_first_value(obj: Any, keys: set[str]) -> Optional[Any]:
     return None
 
 
-def _conversation_payload(backend_data: Dict[str, Any]) -> Dict[str, str]:
-    """Extract prompt, response and model information from backend-api data."""
-    mapping = _find_mapping(backend_data)
+def _conversation_payload(data: Dict[str, Any]) -> Dict[str, str]:
+    """Extract prompt, response and model information from payload data,
+    always using the FIRST real prompt and its FIRST assistant answer.
+    """
+    mapping = _find_mapping(data)
     if not mapping:
         raise UnsupportedProvider(
-            "Could not find conversation mapping in ChatGPT share backend data"
+            "Could not find conversation mapping in ChatGPT share data"
         )
 
-    prompt_text, response_text = _collect_messages(mapping)
+    prompt_text, response_text, response_meta = _collect_first_pair(mapping)
 
-    model = _find_first_value(
-        backend_data,
-        {"model", "modelSlug", "model_slug", "default_model_slug"},
+    # Modelo: intentamos primero el del propio mensaje de respuesta.
+    model = (
+        response_meta.get("model_slug")
+        or response_meta.get("model")
+        or _find_first_value(
+            data,
+            {"model", "modelSlug", "model_slug", "default_model_slug"},
+        )
     )
 
     if not isinstance(model, str) or not model.strip():
@@ -293,7 +342,6 @@ def _conversation_payload(backend_data: Dict[str, Any]) -> Dict[str, str]:
         "response_text": response_text,
         "model": model,
     }
-
 
 # ---------------------------------------------------------------------------
 # 4. Public extractor API
