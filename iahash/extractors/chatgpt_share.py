@@ -1,27 +1,31 @@
-"""Extractor for ChatGPT shared conversations using the backend API.
+"""Extractor for ChatGPT shared conversations using backend API + HTML fallback.
 
-This module starts from a public URL like:
+Starting from a public URL like:
 
     https://chatgpt.com/share/XXXXXXXXXXXX
     https://chat.openai.com/share/XXXXXXXXXXXX
 
-and internally calls:
+we try first:
 
-    https://<host>/backend-api/share/XXXXXXXXXXXX
+    https://<host>/backend-api/share/XXXXXXXXXXXX   (JSON)
 
-The backend API returns JSON describing the shared conversation.
-From that payload we reconstruct:
+If that fails (e.g. HTTP 4xx/5xx from backend), we fall back to:
 
-- the original user prompt (first message with role == "user")
-- the main assistant response (last message with role == "assistant")
+    https://<host>/share/XXXXXXXXXXXX               (HTML + __NEXT_DATA__)
+
+From the resulting JSON payload we reconstruct:
+
+- the original user prompt (FIRST real instruction)
+- the assistant response (FIRST answer to that instruction)
 - the model used (when available)
 
-The result is returned in the format expected by IA-HASH
-for type="CONVERSATION" documents.
+Returned in the format expected by IA-HASH for type="CONVERSATION" documents.
 """
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Any, Dict, Iterable, Optional
 from urllib.parse import urlparse, urlunparse
 
@@ -60,7 +64,7 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# 1. URL validation and backend-api URL construction
+# 1. URL validation and helpers
 # ---------------------------------------------------------------------------
 
 
@@ -83,8 +87,7 @@ def _validate_share_url(url: str) -> None:
     if not parsed.path.startswith(SHARE_PATH_PREFIX):
         raise InvalidShareURL("URL inválida. La ruta debe comenzar con /share/")
 
-    # Require a non-empty identifier after /share/
-    share_id = parsed.path[len(SHARE_PATH_PREFIX):].strip("/")
+    share_id = parsed.path[len(SHARE_PATH_PREFIX) :].strip("/")
     if not share_id:
         raise InvalidShareURL(
             "URL inválida. Falta el identificador de la conversación compartida"
@@ -106,25 +109,93 @@ def _backend_api_url_from_share(url: str) -> str:
     if not parsed.path.startswith(SHARE_PATH_PREFIX):
         raise InvalidShareURL("URL inválida. La ruta debe comenzar con /share/")
 
-    share_id = parsed.path[len(SHARE_PATH_PREFIX):].strip("/")
+    share_id = parsed.path[len(SHARE_PATH_PREFIX) :].strip("/")
     backend_path = f"/backend-api/share/{share_id}"
 
     backend_parsed = parsed._replace(
         path=backend_path,
-        query="",      # clean query just in case
-        fragment="",   # and fragment too
+        query="",   # clean query
+        fragment="",  # and fragment
     )
 
     return urlunparse(backend_parsed)
 
 
 # ---------------------------------------------------------------------------
-# 2. Download JSON from backend-api/share
+# 2. Download helpers: backend JSON + HTML fallback
 # ---------------------------------------------------------------------------
 
 
+def _download_html(url: str, *, timeout: float = 10.0) -> str:
+    """Download the HTML share page."""
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+    }
+
+    try:
+        response = httpx.get(
+            url,
+            timeout=timeout,
+            follow_redirects=True,
+            headers=headers,
+        )
+    except httpx.HTTPError as exc:
+        raise UnreachableSource(
+            f"Connection error when fetching ChatGPT share HTML: {exc}"
+        ) from exc
+
+    if not (200 <= response.status_code < 300):
+        raise UnreachableSource(
+            f"HTTP {response.status_code} when fetching ChatGPT share HTML"
+        )
+
+    return response.text
+
+
+def _extract_next_data(html: str) -> Dict[str, Any]:
+    """Extract and parse the JSON from __NEXT_DATA__ inside the HTML page."""
+    main_pattern = re.compile(
+        r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(?P<json>{.*?})</script>',
+        re.DOTALL | re.IGNORECASE,
+    )
+
+    match = main_pattern.search(html)
+
+    if not match:
+        fallback_pattern = re.compile(
+            r'__NEXT_DATA__[^>]*>\s*(?P<json>{.*?})\s*</script>',
+            re.DOTALL | re.IGNORECASE,
+        )
+        match = fallback_pattern.search(html)
+
+    if not match:
+        raise UnsupportedProvider(
+            "Could not find or parse __NEXT_DATA__ in ChatGPT share page"
+        )
+
+    raw_json = match.group("json")
+
+    try:
+        return json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise UnsupportedProvider(
+            "Could not find or parse __NEXT_DATA__ in ChatGPT share page"
+        ) from exc
+
+
 def _download_share_payload(url: str, *, timeout: float = 10.0) -> Dict[str, Any]:
-    """Download JSON from ChatGPT backend-api/share."""
+    """Download JSON for the shared conversation.
+
+    Strategy:
+    1) Try backend-api/share (JSON).
+    2) If that fails (HTTP error, 4xx/5xx, non-JSON...), fall back to:
+       - HTML share page + __NEXT_DATA__.
+    """
     backend_url = _backend_api_url_from_share(url)
 
     headers = {
@@ -136,6 +207,9 @@ def _download_share_payload(url: str, *, timeout: float = 10.0) -> Dict[str, Any
         "Accept": "application/json, text/plain;q=0.9,*/*;q=0.8",
     }
 
+    backend_error: Optional[Exception] = None
+
+    # 1) Try backend-api/share
     try:
         response = httpx.get(
             backend_url,
@@ -143,23 +217,34 @@ def _download_share_payload(url: str, *, timeout: float = 10.0) -> Dict[str, Any
             follow_redirects=True,
             headers=headers,
         )
+        if 200 <= response.status_code < 300:
+            try:
+                return response.json()
+            except ValueError as exc:
+                backend_error = exc
+        else:
+            backend_error = RuntimeError(
+                f"HTTP {response.status_code} from backend-api/share"
+            )
     except httpx.HTTPError as exc:
-        raise UnreachableSource(
-            f"Connection error when fetching ChatGPT share backend URL: {exc}"
-        ) from exc
+        backend_error = exc
 
-    if not (200 <= response.status_code < 300):
-        raise UnreachableSource(
-            f"HTTP {response.status_code} when fetching ChatGPT share backend URL"
-        )
-
+    # 2) Fallback: HTML + __NEXT_DATA__
     try:
-        return response.json()
-    except ValueError as exc:
-        # We expected JSON from backend-api/share
-        raise UnsupportedProvider(
-            "Expected JSON from ChatGPT backend-api/share endpoint"
-        ) from exc
+        html = _download_html(url, timeout=timeout)
+        next_data = _extract_next_data(html)
+        return next_data
+    except UnreachableSource as exc:
+        detail = f"Cannot fetch ChatGPT share URL via backend-api or HTML: {exc}"
+        if backend_error is not None:
+            detail += f" (backend error: {backend_error})"
+        raise UnreachableSource(detail) from exc
+    except UnsupportedProvider as exc:
+        detail = (
+            "Could not parse ChatGPT share page via backend-api or HTML "
+            f"(backend error: {backend_error})"
+        )
+        raise UnsupportedProvider(detail) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +297,7 @@ def _collect_first_pair(mapping: Dict[str, Any]) -> tuple[str, str, Dict[str, An
       * comes AFTER the chosen prompt in time/order
       * if possible, prefer metadata.channel == "final".
 
-    This guarantees we sign the **first real instruction and its first answer**,
+    This guarantees we sign the FIRST real instruction and its FIRST answer,
     even if the user later adds more instructions or refinements.
     """
     user_msgs: list[tuple[tuple[int, float | int], str]] = []
@@ -233,7 +318,7 @@ def _collect_first_pair(mapping: Dict[str, Any]) -> tuple[str, str, Dict[str, An
         content_type = content.get("content_type")
         parts = content.get("parts") or []
 
-        # Solo nos interesan mensajes de texto.
+        # Only text messages matter.
         if content_type != "text":
             continue
 
@@ -252,7 +337,6 @@ def _collect_first_pair(mapping: Dict[str, Any]) -> tuple[str, str, Dict[str, An
         )
 
         if role == "user":
-            # Ignorar mensajes de sistema del usuario, ocultos, etc.
             if metadata.get("is_user_system_message"):
                 continue
             if metadata.get("is_visually_hidden_from_conversation"):
@@ -268,10 +352,10 @@ def _collect_first_pair(mapping: Dict[str, Any]) -> tuple[str, str, Dict[str, An
             "(missing user or assistant messages)"
         )
 
-    # Primer prompt "real"
+    # First real prompt
     prompt_sort_key, prompt_text = min(user_msgs, key=lambda item: item[0])
 
-    # Assistants que vienen después de ese prompt.
+    # Assistants that come AFTER that prompt.
     candidates = [
         (skey, text, meta)
         for (skey, text, meta) in assistant_msgs
@@ -283,7 +367,7 @@ def _collect_first_pair(mapping: Dict[str, Any]) -> tuple[str, str, Dict[str, An
             "Could not find assistant response after first user prompt"
         )
 
-    # Preferimos channel == "final", si existe.
+    # Prefer channel == "final" if present.
     final_candidates = [
         item for item in candidates if (item[2].get("channel") == "final")
     ]
@@ -324,7 +408,7 @@ def _conversation_payload(data: Dict[str, Any]) -> Dict[str, str]:
 
     prompt_text, response_text, response_meta = _collect_first_pair(mapping)
 
-    # Modelo: intentamos primero el del propio mensaje de respuesta.
+    # Model: try the one from the assistant message first.
     model = (
         response_meta.get("model_slug")
         or response_meta.get("model")
@@ -339,9 +423,10 @@ def _conversation_payload(data: Dict[str, Any]) -> Dict[str, str]:
 
     return {
         "prompt_text": prompt_text,
-        "response_text": response_text,
-        "model": model,
+            "response_text": response_text,
+            "model": model,
     }
+
 
 # ---------------------------------------------------------------------------
 # 4. Public extractor API
@@ -361,9 +446,9 @@ def extract_prompt_and_response_from_chatgpt_share(
     return payload["prompt_text"], payload["response_text"]
 
 
-def _extract_payload(backend_data: Dict[str, Any]) -> Dict[str, Any]:
+def _extract_payload(raw_data: Dict[str, Any]) -> Dict[str, Any]:
     """Enrich payload with IA-HASH specific metadata."""
-    payload = extract_payload_from_chatgpt_share(backend_data)
+    payload = extract_payload_from_chatgpt_share(raw_data)
     payload["provider"] = "chatgpt"
 
     if not payload.get("model"):
@@ -375,8 +460,8 @@ def _extract_payload(backend_data: Dict[str, Any]) -> Dict[str, Any]:
 def extract_from_url(url: str) -> Dict[str, Any]:
     """Download and extract a ChatGPT shared conversation from a URL."""
     _validate_share_url(url)
-    backend_data = _download_share_payload(url)
-    payload = _extract_payload(backend_data)
+    raw_data = _download_share_payload(url)
+    payload = _extract_payload(raw_data)
     payload["conversation_url"] = url
     payload["url"] = url
     return payload
