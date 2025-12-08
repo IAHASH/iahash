@@ -1,6 +1,9 @@
 -- Seed data for IA-HASH v1.2
+--
+-- Puede ejecutarse sobre una base vacía o existente: los INSERT usan
+-- "OR IGNORE" para no fallar si ya hay datos previos.
 
-INSERT INTO prompts (
+INSERT OR IGNORE INTO prompts (
     slug,
     owner_id,
     title,
@@ -35,7 +38,7 @@ VALUES
         'f8e8f22ae29611469bba50ea2072a66b3887ed679c955b10c4448e8cabd7e56c'
     );
 
-INSERT INTO sequences (slug, title, description, category, visibility)
+INSERT OR IGNORE INTO sequences (slug, title, description, category, visibility)
 VALUES
     (
         'onboarding-7d',
@@ -52,7 +55,7 @@ VALUES
         'public'
     );
 
-INSERT INTO sequence_steps (sequence_id, position, title, description, prompt_id)
+INSERT OR IGNORE INTO sequence_steps (sequence_id, position, title, description, prompt_id)
 VALUES
     (
         (SELECT id FROM sequences WHERE slug = 'onboarding-7d'),

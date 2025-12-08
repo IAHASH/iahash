@@ -26,12 +26,17 @@ from iahash.db import (
     list_sequences,
 )
 from iahash.config import ISSUER_PK_URL
-from iahash.crypto import get_issuer_public_key_pem
+from iahash.crypto import get_issuer_public_key_pem, normalize_text
 from iahash.extractors.chatgpt_share import (
     extract_chatgpt_share,
     extract_payload_from_chatgpt_share,
 )
-from iahash.issuer import PROTOCOL_VERSION, issue_conversation, issue_from_share, issue_pair
+from iahash.issuer import (
+    PROTOCOL_VERSION,
+    issue_conversation,
+    issue_from_share,
+    issue_pair,
+)
 from iahash.extractors.exceptions import UnsupportedProvider, UnreachableSource
 from iahash.verifier import verify_document
 
@@ -70,6 +75,7 @@ class IssueConversationRequest(BaseModel):
 
 class CheckRequest(BaseModel):
     document: Dict[str, Any]
+    issuer_pk_url: str | None = None
 
 
 class IssueFromSharePayload(BaseModel):
@@ -85,6 +91,7 @@ class IssueFromPromptUrlPayload(BaseModel):
     share_url: str
     model: str | None = None
     subject_id: str | None = None
+    prompt_text: str | None = None
 
 
 class VerifySharePayload(BaseModel):
@@ -106,9 +113,7 @@ def _issue_response(document: Dict[str, Any]) -> Dict[str, Any]:
     return {"status": "ISSUED", "document": document, "error": None}
 
 
-def _error_response(
-    code: str, message: str, *, status_code: int = 400
-) -> JSONResponse:
+def _error_response(code: str, message: str, *, status_code: int = 400) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={
@@ -207,7 +212,9 @@ app.add_middleware(
 
 static_dir = WEB_DIR / "static"
 if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir), html=False), name="static")
+    app.mount(
+        "/static", StaticFiles(directory=str(static_dir), html=False), name="static"
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -427,9 +434,12 @@ def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]
 
 @app.post("/api/check")
 def api_check(payload: CheckRequest) -> Dict[str, Any]:
-    verification = verify_document(payload.document)
-
     document = dict(payload.document)
+    if payload.issuer_pk_url:
+        document.setdefault("issuer_pk_url", payload.issuer_pk_url)
+
+    verification = verify_document(document)
+
     resolved_issuer = verification.get("resolved_issuer_pk_url")
     if not document.get("issuer_pk_url") and resolved_issuer:
         document["issuer_pk_url"] = resolved_issuer
@@ -448,12 +458,16 @@ async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]
     soup = BeautifulSoup(response.text, "html.parser")
     script = soup.find("script", id="__NEXT_DATA__")
     if not script or not script.string:
-        raise HTTPException(status_code=400, detail="ChatGPT share page has no data to parse")
+        raise HTTPException(
+            status_code=400, detail="ChatGPT share page has no data to parse"
+        )
 
     try:
         data = json.loads(script.string)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Cannot parse ChatGPT share payload") from exc
+        raise HTTPException(
+            status_code=400, detail="Cannot parse ChatGPT share payload"
+        ) from exc
 
     try:
         payload_extracted = extract_payload_from_chatgpt_share(data)
@@ -465,7 +479,9 @@ async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]
     model_value = payload_extracted.get("model") or payload.model or "chatgpt"
 
     if not prompt_text or not response_text:
-        raise HTTPException(status_code=400, detail="No se pudo extraer prompt o respuesta")
+        raise HTTPException(
+            status_code=400, detail="No se pudo extraer prompt o respuesta"
+        )
 
     try:
         document = issue_from_share(
@@ -496,16 +512,25 @@ def _issue_prompt_from_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]
     try:
         resolved_prompt_id = _resolve_prompt_id(payload.prompt_id)
     except HTTPException as exc:
-        return _error_response("PROMPT_NOT_FOUND", exc.detail, status_code=exc.status_code)
+        return _error_response(
+            "PROMPT_NOT_FOUND", exc.detail, status_code=exc.status_code
+        )
+
+    prompt_record = None
+    if payload.prompt_id is not None:
+        try:
+            prompt_record = get_prompt_by_slug(str(payload.prompt_id))
+            if prompt_record is None:
+                prompt_record = get_prompt_by_id(int(payload.prompt_id))
+        except Exception:
+            prompt_record = None
 
     try:
         extracted = extract_chatgpt_share(share_url)
     except UnsupportedProvider as exc:
         return _error_response("INVALID_URL", "Invalid or unsupported share URL")
     except UnreachableSource as exc:  # pragma: no cover - network defensive
-        return _error_response(
-            "FETCH_FAILED", "Cannot fetch ChatGPT share URL"
-        )
+        return _error_response("FETCH_FAILED", "Cannot fetch ChatGPT share URL")
     except Exception as exc:  # pragma: no cover - defensive
         return _error_response(
             "INTERNAL_ERROR",
@@ -519,6 +544,20 @@ def _issue_prompt_from_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]
     if not prompt_text or not response_text:
         return _error_response(
             "PARSING_FAILED", "Cannot extract conversation from share URL"
+        )
+
+    expected_prompt_text = None
+    if prompt_record and prompt_record.get("full_prompt"):
+        expected_prompt_text = prompt_record["full_prompt"]
+    elif payload.prompt_text:
+        expected_prompt_text = payload.prompt_text
+
+    if expected_prompt_text and normalize_text(expected_prompt_text) != normalize_text(
+        prompt_text
+    ):
+        return _error_response(
+            "PROMPT_MISMATCH",
+            "El prompt extraído no coincide con el prompt maestro/pegado.",
         )
 
     model_value = (

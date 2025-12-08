@@ -47,9 +47,7 @@ def ensure_db_initialized() -> None:
         else:
             try:
                 conn = sqlite3.connect(str(DB_PATH))
-                cur = conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                )
+                cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
                 existing_tables = {row[0] for row in cur.fetchall()}
                 needs_bootstrap = not {"prompts", "iahash_documents"}.issubset(
                     existing_tables
@@ -95,6 +93,7 @@ def get_connection() -> sqlite3.Connection:
 # ---------------------------------------------------------------------------
 # PROMPTS
 # ---------------------------------------------------------------------------
+
 
 def get_prompt_by_slug(slug: str) -> Optional[Dict[str, Any]]:
     conn = get_connection()
@@ -160,7 +159,9 @@ def list_prompts(*, visibility: Optional[str] = None) -> List[Dict[str, Any]]:
         conn.close()
 
 
-def _compute_prompt_hashes(full_prompt: str, *, hmac_key: Optional[str]) -> Tuple[str, Optional[str]]:
+def _compute_prompt_hashes(
+    full_prompt: str, *, hmac_key: Optional[str]
+) -> Tuple[str, Optional[str]]:
     normalized = normalize_text(full_prompt)
     h_public = sha256_hex(normalized.encode("utf-8"))
 
@@ -252,7 +253,9 @@ def update_prompt(
     if not existing:
         raise ValueError(f"Prompt with id {prompt_id} not found")
 
-    prompt_text = full_prompt if full_prompt is not None else existing.get("full_prompt", "")
+    prompt_text = (
+        full_prompt if full_prompt is not None else existing.get("full_prompt", "")
+    )
     hmac_key = os.getenv("IAHASH_PROMPT_HMAC_KEY")
     computed_public, computed_secret = _compute_prompt_hashes(
         prompt_text, hmac_key=hmac_key
@@ -266,13 +269,19 @@ def update_prompt(
         cols = _get_table_columns(conn, "prompts")
         updates: Dict[str, Any] = {
             "title": title if title is not None else existing.get("title"),
-            "description": description if description is not None else existing.get("description"),
+            "description": (
+                description if description is not None else existing.get("description")
+            ),
             "full_prompt": prompt_text,
             "category": category if category is not None else existing.get("category"),
-            "visibility": visibility if visibility is not None else existing.get("visibility"),
-            "signature_prompt": signature_prompt
-            if signature_prompt is not None
-            else existing.get("signature_prompt"),
+            "visibility": (
+                visibility if visibility is not None else existing.get("visibility")
+            ),
+            "signature_prompt": (
+                signature_prompt
+                if signature_prompt is not None
+                else existing.get("signature_prompt")
+            ),
             "h_public": final_h_public,
             "h_secret": final_h_secret,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -302,6 +311,7 @@ def delete_prompt(prompt_id: int) -> None:
 # ---------------------------------------------------------------------------
 # IA-HASH DOCUMENTS
 # ---------------------------------------------------------------------------
+
 
 def _get_table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     """
@@ -376,6 +386,9 @@ def _load_seed_data(conn: sqlite3.Connection) -> None:
         prompt_count = 0
 
     if prompt_count:
+        logger.info(
+            "Seed de prompts omitido: la tabla ya contiene %s filas", prompt_count
+        )
         return
 
     try:
@@ -434,20 +447,14 @@ def store_iah_document(document: Dict[str, Any]) -> None:
             "subject_id": document.get("subject_id"),
             "store_raw": 1 if document.get("store_raw") else 0,
             "raw_prompt_text": (
-                document.get("raw_prompt_text")
-                if document.get("store_raw")
-                else None
+                document.get("raw_prompt_text") if document.get("store_raw") else None
             ),
             "raw_response_text": (
-                document.get("raw_response_text")
-                if document.get("store_raw")
-                else None
+                document.get("raw_response_text") if document.get("store_raw") else None
             ),
             # campos nuevos del schema v1.2 opción B
             "raw_context_text": (
-                document.get("raw_context_text")
-                if document.get("store_raw")
-                else None
+                document.get("raw_context_text") if document.get("store_raw") else None
             ),
             "json_document": json_doc,
         }
@@ -495,6 +502,7 @@ def get_iah_document_by_id(iah_id: str) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # SECUENCIAS
 # ---------------------------------------------------------------------------
+
 
 def _insert_sequence_steps(
     conn: sqlite3.Connection, sequence_id: int, steps: List[Dict[str, Any]]
@@ -592,13 +600,13 @@ def update_sequence(
 
         payload = {
             "title": title if title is not None else existing["title"],
-            "description": description
-            if description is not None
-            else existing["description"],
+            "description": (
+                description if description is not None else existing["description"]
+            ),
             "category": category if category is not None else existing["category"],
-            "visibility": visibility
-            if visibility is not None
-            else existing["visibility"],
+            "visibility": (
+                visibility if visibility is not None else existing["visibility"]
+            ),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         filtered = {k: v for k, v in payload.items() if k in cols}
@@ -610,7 +618,9 @@ def update_sequence(
         )
 
         if steps is not None:
-            conn.execute("DELETE FROM sequence_steps WHERE sequence_id = ?", (sequence_id,))
+            conn.execute(
+                "DELETE FROM sequence_steps WHERE sequence_id = ?", (sequence_id,)
+            )
             _insert_sequence_steps(conn, sequence_id, steps)
 
         conn.commit()
@@ -648,7 +658,9 @@ def get_sequence_by_slug(slug: str) -> Optional[Dict[str, Any]]:
         conn.close()
 
 
-def get_sequence_steps(conn: sqlite3.Connection, sequence_id: int) -> List[Dict[str, Any]]:
+def get_sequence_steps(
+    conn: sqlite3.Connection, sequence_id: int
+) -> List[Dict[str, Any]]:
     cur = conn.execute(
         """
         SELECT ss.id, ss.position, ss.title, ss.description, ss.prompt_id,
