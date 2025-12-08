@@ -192,8 +192,10 @@ Contributions are welcome\! ✨
 
 ## © License
 
-IA-HASH is released under the **Apache 2**.
+IA-HASH is released under the **Apache License 2.0**.  
+You are free to use, modify, distribute and integrate the project, with strong
+patent protections and clear rules for contribution.
 
-See `LICENSE` for details.
+See the [`LICENSE`](./LICENSE) file for details.
 
 ```
