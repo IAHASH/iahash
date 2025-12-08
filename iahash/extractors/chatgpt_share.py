@@ -1,22 +1,23 @@
-"""Extractor para conversaciones compartidas de ChatGPT.
+"""Extractor for ChatGPT shared conversations using the backend API.
 
-Este módulo parte de una URL pública tipo:
+This module starts from a public URL like:
 
     https://chatgpt.com/share/XXXXXXXXXXXX
+    https://chat.openai.com/share/XXXXXXXXXXXX
 
-y la convierte internamente en una llamada a:
+and internally calls:
 
-    https://chatgpt.com/backend-api/share/XXXXXXXXXXXX
+    https://<host>/backend-api/share/XXXXXXXXXXXX
 
-De esa llamada obtenemos un JSON con la conversación compartida y
-reconstruimos:
+The backend API returns JSON describing the shared conversation.
+From that payload we reconstruct:
 
-- el prompt de usuario "original" (primer mensaje con role == "user")
-- la respuesta "principal" (último mensaje con role == "assistant")
-- el modelo utilizado (si está disponible)
+- the original user prompt (first message with role == "user")
+- the main assistant response (last message with role == "assistant")
+- the model used (when available)
 
-Devolvemos estos datos en el formato que espera IA-HASH para generar
-un documento type="CONVERSATION".
+The result is returned in the format expected by IA-HASH
+for type="CONVERSATION" documents.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ from iahash.extractors.exceptions import (
     UnsupportedProvider,
 )
 
-# Dominios aceptados para URLs compartidas de ChatGPT.
+# Accepted hostnames for ChatGPT share URLs.
 CHATGPT_SHARE_HOSTS = {
     "chatgpt.com",
     "www.chatgpt.com",
@@ -40,7 +41,7 @@ CHATGPT_SHARE_HOSTS = {
     "www.chat.openai.com",
 }
 
-# Prefijo de la ruta de conversaciones públicas.
+# Shared conversation path prefix.
 SHARE_PATH_PREFIX = "/share/"
 
 ERROR_UNREACHABLE = "unreachable"
@@ -59,12 +60,12 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# 1. Validación de URL y construcción de backend-api URL
+# 1. URL validation and backend-api URL construction
 # ---------------------------------------------------------------------------
 
 
 def _validate_share_url(url: str) -> None:
-    """Valida que la URL apunte a una conversación compartida de ChatGPT."""
+    """Validate that the URL points to a ChatGPT shared conversation."""
     parsed = urlparse(url)
 
     if parsed.scheme not in {"http", "https"}:
@@ -82,8 +83,8 @@ def _validate_share_url(url: str) -> None:
     if not parsed.path.startswith(SHARE_PATH_PREFIX):
         raise InvalidShareURL("URL inválida. La ruta debe comenzar con /share/")
 
-    # Debe haber un identificador después de /share/
-    share_id = parsed.path[len(SHARE_PATH_PREFIX) :].strip("/")
+    # Require a non-empty identifier after /share/
+    share_id = parsed.path[len(SHARE_PATH_PREFIX):].strip("/")
     if not share_id:
         raise InvalidShareURL(
             "URL inválida. Falta el identificador de la conversación compartida"
@@ -91,39 +92,39 @@ def _validate_share_url(url: str) -> None:
 
 
 def _backend_api_url_from_share(url: str) -> str:
-    """Convierte:
+    """Convert:
 
         https://chatgpt.com/share/ID
+        https://chat.openai.com/share/ID
 
-    en:
+    into:
 
-        https://chatgpt.com/backend-api/share/ID
+        https://<host>/backend-api/share/ID
     """
     parsed = urlparse(url)
 
-    # Forzamos el path a /backend-api/share/<id>
     if not parsed.path.startswith(SHARE_PATH_PREFIX):
         raise InvalidShareURL("URL inválida. La ruta debe comenzar con /share/")
 
-    share_id = parsed.path[len(SHARE_PATH_PREFIX) :].strip("/")
+    share_id = parsed.path[len(SHARE_PATH_PREFIX):].strip("/")
     backend_path = f"/backend-api/share/{share_id}"
 
     backend_parsed = parsed._replace(
         path=backend_path,
-        query="",      # limpiamos query por si acaso
-        fragment="",   # y fragmento
+        query="",      # clean query just in case
+        fragment="",   # and fragment too
     )
 
     return urlunparse(backend_parsed)
 
 
 # ---------------------------------------------------------------------------
-# 2. Descarga del JSON de backend-api/share
+# 2. Download JSON from backend-api/share
 # ---------------------------------------------------------------------------
 
 
 def _download_share_payload(url: str, *, timeout: float = 10.0) -> Dict[str, Any]:
-    """Descarga el JSON de la API interna de share de ChatGPT."""
+    """Download JSON from ChatGPT backend-api/share."""
     backend_url = _backend_api_url_from_share(url)
 
     headers = {
@@ -155,23 +156,22 @@ def _download_share_payload(url: str, *, timeout: float = 10.0) -> Dict[str, Any
     try:
         return response.json()
     except ValueError as exc:
-        # Esperábamos JSON del backend-api
+        # We expected JSON from backend-api/share
         raise UnsupportedProvider(
             "Expected JSON from ChatGPT backend-api/share endpoint"
         ) from exc
 
 
 # ---------------------------------------------------------------------------
-# 3. Búsqueda genérica dentro del payload
+# 3. Generic search helpers on the backend payload
 # ---------------------------------------------------------------------------
 
 
 def _find_mapping(obj: Any) -> Optional[Dict[str, Any]]:
-    """Busca recursivamente un diccionario que se comporte como el 'mapping'
-    de conversación de ChatGPT.
+    """Recursively search for a conversation mapping structure.
 
-    Consideramos 'mapping' cualquier dict cuyos valores (también dict) contengan
-    al menos una clave "message".
+    We consider 'mapping' any dict whose values (also dicts) contain
+    at least a "message" key.
     """
     if isinstance(obj, dict):
         dict_values: Iterable[Any] = obj.values()
@@ -195,13 +195,13 @@ def _find_mapping(obj: Any) -> Optional[Dict[str, Any]]:
 
 
 def _collect_messages(mapping: Dict[str, Any]) -> tuple[str, str]:
-    """Devuelve (prompt_text, response_text) a partir del mapping.
+    """Return (prompt_text, response_text) from the mapping.
 
-    - Prompt: primer mensaje de role == "user"
-    - Respuesta: último mensaje de role == "assistant"
+    - Prompt: earliest message with role == "user"
+    - Response: latest message with role == "assistant"
 
-    Si existe `create_time`, se usa para ordenar; si no, se usa el orden
-    de iteración como fallback.
+    If `create_time` exists, it is used for ordering; otherwise
+    we fall back to iteration order.
     """
     user_messages: list[tuple[tuple[int, float | int], str]] = []
     assistant_messages: list[tuple[tuple[int, float | int], str]] = []
@@ -227,7 +227,7 @@ def _collect_messages(mapping: Dict[str, Any]) -> tuple[str, str]:
         text = "\n".join(text_parts)
         create_time = message.get("create_time")
 
-        # (0, t) si hay timestamp numérico, (1, idx) como fallback
+        # (0, t) when there is a numeric timestamp, (1, idx) as fallback
         sort_key: tuple[int, float | int] = (
             (0, create_time)
             if isinstance(create_time, (int, float))
@@ -252,7 +252,7 @@ def _collect_messages(mapping: Dict[str, Any]) -> tuple[str, str]:
 
 
 def _find_first_value(obj: Any, keys: set[str]) -> Optional[Any]:
-    """Busca recursivamente el primer valor cuyo nombre de clave esté en keys."""
+    """Recursively search for the first value whose key matches ``keys``."""
     if isinstance(obj, dict):
         for key, value in obj.items():
             if key in keys:
@@ -271,9 +271,7 @@ def _find_first_value(obj: Any, keys: set[str]) -> Optional[Any]:
 
 
 def _conversation_payload(backend_data: Dict[str, Any]) -> Dict[str, str]:
-    """Construye el payload de conversación a partir del JSON devuelto por
-    backend-api/share.
-    """
+    """Extract prompt, response and model information from backend-api data."""
     mapping = _find_mapping(backend_data)
     if not mapping:
         raise UnsupportedProvider(
@@ -298,26 +296,26 @@ def _conversation_payload(backend_data: Dict[str, Any]) -> Dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# 4. API interna del extractor
+# 4. Public extractor API
 # ---------------------------------------------------------------------------
 
 
 def extract_payload_from_chatgpt_share(data: Dict[str, Any]) -> Dict[str, str]:
-    """Devuelve un dict con `prompt_text`, `response_text` y `model`."""
+    """Return a dict with `prompt_text`, `response_text` and `model`."""
     return _conversation_payload(data)
 
 
 def extract_prompt_and_response_from_chatgpt_share(
     data: Dict[str, Any],
 ) -> tuple[str, str]:
-    """Devuelve sólo (prompt_text, response_text)."""
+    """Return only (prompt_text, response_text)."""
     payload = _conversation_payload(data)
     return payload["prompt_text"], payload["response_text"]
 
 
 def _extract_payload(backend_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Enriquece el payload con metadatos específicos de IA-HASH."""
-    payload: Dict[str, Any] = extract_payload_from_chatgpt_share(backend_data)
+    """Enrich payload with IA-HASH specific metadata."""
+    payload = extract_payload_from_chatgpt_share(backend_data)
     payload["provider"] = "chatgpt"
 
     if not payload.get("model"):
@@ -326,13 +324,8 @@ def _extract_payload(backend_data: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
-# ---------------------------------------------------------------------------
-# 5. Punto de entrada público
-# ---------------------------------------------------------------------------
-
-
 def extract_from_url(url: str) -> Dict[str, Any]:
-    """Descarga y extrae una conversación compartida de ChatGPT a partir de una URL."""
+    """Download and extract a ChatGPT shared conversation from a URL."""
     _validate_share_url(url)
     backend_data = _download_share_payload(url)
     payload = _extract_payload(backend_data)
@@ -342,5 +335,5 @@ def extract_from_url(url: str) -> Dict[str, Any]:
 
 
 def extract_chatgpt_share(url: str) -> Dict[str, Any]:
-    """Alias de compatibilidad para código existente."""
+    """Compatibility alias for existing code."""
     return extract_from_url(url)
