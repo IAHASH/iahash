@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}IA-HASH · Prompt + URL{% endblock %}
+{% block content %}
+  <h1 class="page-title">Prompt + URL (ChatGPT)</h1>
+  <p class="page-lead">Elige un prompt maestro o pega el texto manualmente y valida una conversación pública de chatgpt.com/share.</p>
+
+  <div class="card">
+    <h3>Configurar la verificación</h3>
+    <div class="form-grid">
+      <label>
+        <span class="field-label">Elige un prompt maestro (opcional)</span>
+        <select id="master-prompt-select">
+          <option value="">— No usar prompt maestro —</option>
+        </select>
+        <p class="helper" id="prompt-hash">h_public: —</p>
+      </label>
+      <label>
+        <span class="field-label">Prompt que quieres verificar</span>
+        <textarea id="prompt-text" placeholder="Si no usas maestro, pega aquí el prompt exacto"></textarea>
+        <p class="helper">Si editas este texto, debe coincidir EXACTAMENTE con el prompt de la conversación compartida.</p>
+      </label>
+      <label>
+        <span class="field-label">URL pública de la conversación (chatgpt.com/share/...)</span>
+        <input type="text" id="conversation-url" placeholder="https://chatgpt.com/share/..." />
+      </label>
+      <div class="field-row">
+        <label style="flex:1;">
+          <span class="field-label">Modelo</span>
+          <input type="text" id="conversation-model" value="chatgpt" />
+        </label>
+        <button class="button" id="conversation-submit" type="button">Verificar conversación</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card result-card" id="prompt-url-result">
+    <div class="status-line status-neutral" data-status>Estado pendiente</div>
+    <div class="hash-list" data-hashes></div>
+    <div class="helper" data-message>Selecciona un prompt y pega la URL para empezar.</div>
+    <h4>Documento IA-HASH</h4>
+    <pre id="prompt-url-json">(aún no generado)</pre>
+  </div>
+
+  <script src="/static/js/prompt_url.js"></script>
+{% endblock %}

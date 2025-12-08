@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}IA-HASH · Pares{% endblock %}
+{% block content %}
+  <h1 class="page-title">Pares IA-HASH</h1>
+  <p class="page-lead">Introduce un prompt y una respuesta. Firmaremos el par y te mostraremos hashes y el JSON IA-HASH listo para compartir.</p>
+
+  <div class="card">
+    <h3>Prompt + Respuesta</h3>
+    <p class="helper">Rellena ambos campos. El par se sellará con el issuer configurado en el servidor.</p>
+    <div class="form-grid">
+      <div class="split">
+        <label>
+          <span class="field-label">Prompt</span>
+          <textarea id="pair-prompt" placeholder="Pega aquí el prompt exacto"></textarea>
+        </label>
+        <label>
+          <span class="field-label">Respuesta</span>
+          <textarea id="pair-answer" placeholder="Respuesta completa de la IA"></textarea>
+        </label>
+      </div>
+      <div class="field-row">
+        <label style="flex:1;">
+          <span class="field-label">Modelo</span>
+          <input type="text" id="pair-model" value="unknown" />
+        </label>
+        <button class="button" id="pair-submit" type="button">Firmar y verificar par</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card result-card" id="pair-result">
+    <div class="status-line status-neutral" data-status>Estado pendiente</div>
+    <div class="hash-list" data-hashes></div>
+    <div class="helper" data-message>Introduce los datos y pulsa el botón para generar el IA-HASH.</div>
+    <h4>Documento IA-HASH</h4>
+    <pre id="pair-json">(aún no generado)</pre>
+  </div>
+
+  <script src="/static/js/pairs.js"></script>
+{% endblock %}

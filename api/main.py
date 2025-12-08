@@ -10,7 +10,12 @@ import httpx
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, HttpUrl
@@ -74,7 +79,8 @@ class IssueConversationRequest(BaseModel):
 
 
 class CheckRequest(BaseModel):
-    document: Dict[str, Any]
+    document: Dict[str, Any] | None = None
+    identifier: str | None = None
     issuer_pk_url: str | None = None
 
 
@@ -110,16 +116,17 @@ CHATGPT_SHARE_PATTERN = re.compile(
 def _issue_response(document: Dict[str, Any]) -> Dict[str, Any]:
     """Uniform response envelope for issuing endpoints."""
 
-    return {"status": "ISSUED", "document": document, "error": None}
+    return _ok_response(document)
 
 
 def _error_response(code: str, message: str, *, status_code: int = 400) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={
-            "status": "ERROR",
-            "document": None,
-            "error": {"code": code, "message": message},
+            "ok": False,
+            "error_code": code,
+            "error_message": message,
+            "data": None,
         },
     )
 
@@ -134,16 +141,57 @@ def _share_error_response(
     return JSONResponse(
         status_code=status_code,
         content={
-            "success": False,
-            "reason": reason,
-            "error": message,
-            "extracted_prompt": None,
-            "extracted_answer": None,
-            "provider": None,
-            "model": None,
-            "conversation_url": conversation_url,
+            "ok": False,
+            "error_code": reason,
+            "error_message": message,
+            "data": {
+                "extracted_prompt": None,
+                "extracted_answer": None,
+                "provider": None,
+                "model": None,
+                "conversation_url": conversation_url,
+            },
         },
     )
+
+
+def _document_payload(document: Dict[str, Any], verification: Dict[str, Any] | None) -> Dict[str, Any]:
+    """Build the unified payload returned by issuing/verification endpoints."""
+
+    hashes = {
+        "h_prompt": document.get("h_prompt"),
+        "h_response": document.get("h_response"),
+        "h_total": document.get("h_total"),
+        "signature": document.get("signature"),
+        "issuer_pk_url": document.get("issuer_pk_url"),
+    }
+
+    return {
+        "iah_id": document.get("iah_id"),
+        "document": document,
+        "hashes": hashes,
+        "verification": verification,
+    }
+
+
+def _ok_response(document: Dict[str, Any], *, status: str = "ISSUED") -> Dict[str, Any]:
+    verification: Dict[str, Any] | None = None
+    try:
+        verification = verify_document(document)
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        verification = {
+            "valid": False,
+            "status": "VERIFY_ERROR",
+            "errors": [str(exc)],
+        }
+
+    return {
+        "ok": True,
+        "error_code": None,
+        "error_message": None,
+        "status": status,
+        "data": _document_payload(document, verification),
+    }
 
 
 def _resolve_prompt_id(prompt_id: Optional[str]) -> Optional[str]:
@@ -222,12 +270,30 @@ def web_home(request: Request) -> Any:
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.get("/verify", response_class=HTMLResponse)
-def web_verify(request: Request) -> Any:
+@app.get("/verify")
+def web_verify() -> RedirectResponse:
+    """Legacy entrypoint: redirect to the new /pairs page."""
+
+    return RedirectResponse(url="/pairs", status_code=307)
+
+
+@app.get("/pairs", response_class=HTMLResponse)
+def web_pairs(request: Request) -> Any:
+    prompts = list_prompts(visibility="public")
+    return templates.TemplateResponse("pairs.html", {"request": request, "prompts": prompts})
+
+
+@app.get("/prompt-url", response_class=HTMLResponse)
+def web_prompt_url(request: Request) -> Any:
     prompts = list_prompts(visibility="public")
     return templates.TemplateResponse(
-        "verify.html", {"request": request, "prompts": prompts}
+        "prompt_url.html", {"request": request, "prompts": prompts}
     )
+
+
+@app.get("/checker", response_class=HTMLResponse)
+def web_checker(request: Request) -> Any:
+    return templates.TemplateResponse("checker.html", {"request": request})
 
 
 @app.get("/compare", response_class=HTMLResponse)
@@ -360,7 +426,7 @@ def api_verify_pair(payload: IssuePairRequest) -> Dict[str, Any]:
         )
         return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _error_response("PAIR_ERROR", str(exc))
 
 
 @app.post("/api/verify/share")
@@ -401,14 +467,16 @@ def api_verify_share(payload: VerifySharePayload) -> Dict[str, Any]:
     model_value = extracted.get("model") or "unknown"
 
     return {
-        "success": True,
-        "reason": None,
-        "error": None,
-        "extracted_prompt": prompt_text,
-        "extracted_answer": response_text,
-        "provider": provider,
-        "model": model_value,
-        "conversation_url": share_url,
+        "ok": True,
+        "error_code": None,
+        "error_message": None,
+        "data": {
+            "extracted_prompt": prompt_text,
+            "extracted_answer": response_text,
+            "provider": provider,
+            "model": model_value,
+            "conversation_url": share_url,
+        },
     }
 
 
@@ -429,12 +497,30 @@ def api_verify_conversation(payload: IssueConversationRequest) -> Dict[str, Any]
         )
         return _issue_response(document)
     except Exception as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _error_response("CONVERSATION_ERROR", str(exc))
 
 
 @app.post("/api/check")
 def api_check(payload: CheckRequest) -> Dict[str, Any]:
-    document = dict(payload.document)
+    document: Dict[str, Any] | None = None
+
+    if payload.document:
+        document = dict(payload.document)
+    elif payload.identifier:
+        record = get_iah_document_by_id(payload.identifier.strip())
+        if not record:
+            raise HTTPException(status_code=404, detail="Documento IA-HASH no encontrado")
+        try:
+            if record.get("json_document"):
+                document = json.loads(record["json_document"])
+            else:
+                document = {k: v for k, v in record.items() if k != "json_document"}
+        except Exception as exc:  # pragma: no cover - defensive
+            raise HTTPException(status_code=400, detail="Documento almacenado inválido") from exc
+
+    if document is None:
+        raise HTTPException(status_code=400, detail="Falta el documento IA-HASH a verificar")
+
     if payload.issuer_pk_url:
         document.setdefault("issuer_pk_url", payload.issuer_pk_url)
 
@@ -444,7 +530,19 @@ def api_check(payload: CheckRequest) -> Dict[str, Any]:
     if not document.get("issuer_pk_url") and resolved_issuer:
         document["issuer_pk_url"] = resolved_issuer
 
-    return {"document": document, "verification": verification}
+    if verification.get("valid"):
+        return _ok_response(document, status=verification.get("status", "VERIFIED"))
+
+    error_message = "; ".join(verification.get("errors") or []) or "Documento no válido"
+    return JSONResponse(
+        status_code=400,
+        content={
+            "ok": False,
+            "error_code": verification.get("status") or "VERIFICATION_FAILED",
+            "error_message": error_message,
+            "data": _document_payload(document, verification),
+        },
+    )
 
 
 @app.post("/api/issue-from-share")

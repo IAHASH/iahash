@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}IA-HASH · Checker{% endblock %}
+{% block content %}
+  <h1 class="page-title">Comprobador IA-HASH</h1>
+  <p class="page-lead">Pega un documento IA-HASH completo (JSON) o un identificador para verificar la firma y los hashes.</p>
+
+  <div class="card">
+    <h3>Documento o identificador</h3>
+    <div class="form-grid">
+      <label>
+        <span class="field-label">IA-HASH JSON o token</span>
+        <textarea id="checker-input" placeholder='{"iah_id":"..."}'></textarea>
+        <p class="helper">Acepta JSON completo. Si solo envías un texto, se buscará como iah_id en la base de datos local.</p>
+      </label>
+      <label>
+        <span class="field-label">URL de clave pública (opcional)</span>
+        <input type="text" id="checker-pk-url" placeholder="https://iahash.com/keys/issuer_ed25519.pub" />
+      </label>
+      <button class="button" id="checker-submit" type="button">Comprobar</button>
+    </div>
+  </div>
+
+  <div class="card result-card" id="checker-result">
+    <div class="status-line status-neutral" data-status>Estado pendiente</div>
+    <div class="hash-list" data-hashes></div>
+    <div class="helper" data-message>Pega el documento para ver el resultado de la firma.</div>
+    <h4>Documento IA-HASH</h4>
+    <pre id="checker-json">(aún no comprobado)</pre>
+  </div>
+
+  <script src="/static/js/checker_page.js"></script>
+{% endblock %}
