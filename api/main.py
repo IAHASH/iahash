@@ -42,7 +42,11 @@ from iahash.issuer import (
     issue_from_share,
     issue_pair,
 )
-from iahash.extractors.exceptions import UnsupportedProvider, UnreachableSource
+from iahash.extractors.exceptions import (
+    InvalidShareURL,
+    UnsupportedProvider,
+    UnreachableSource,
+)
 from iahash.verifier import verify_document
 
 APP_NAME = "IA-HASH API"
@@ -107,9 +111,7 @@ class VerifySharePayload(BaseModel):
 logger = logging.getLogger(__name__)
 
 CHATGPT_SHARE_PATTERN = re.compile(
-    r"^https://(chatgpt\.com|chat\.openai\.com)/share/"
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-    r"/?(?:\?.*)?$"
+    r"^https?://(www\.)?(chatgpt\.com|chat\.openai\.com)/share/[^/?#]+/?(?:\?.*)?$"
 )
 
 
@@ -460,6 +462,8 @@ def api_verify_share(payload: VerifySharePayload) -> Dict[str, Any]:
 
     try:
         extracted = extract_chatgpt_share(share_url)
+    except InvalidShareURL as exc:
+        return _share_error_response("INVALID_URL", str(exc) or "URL inválida")
     except UnsupportedProvider as exc:
         return _share_error_response(
             "PARSING_FAILED", str(exc) or "Unsupported or unreadable ChatGPT share page"
@@ -673,6 +677,8 @@ def _issue_prompt_from_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]
 
     try:
         extracted = extract_chatgpt_share(share_url)
+    except InvalidShareURL as exc:
+        return _error_response("INVALID_URL", str(exc) or "Invalid or unsupported share URL")
     except UnsupportedProvider as exc:
         return _error_response(
             "INVALID_URL", str(exc) or "Invalid or unsupported share URL"
