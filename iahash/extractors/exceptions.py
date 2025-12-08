@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
-__all__ = ["ExtractorError", "UnreachableSource", "UnsupportedProvider"]
+__all__ = [
+    "ExtractorError",
+    "InvalidShareURL",
+    "UnreachableSource",
+    "UnsupportedProvider",
+]
 
 
 class ExtractorError(Exception):
     """Base class for extractor-related errors."""
+
+
+class InvalidShareURL(ExtractorError):
+    """Raised when a share URL is not valid for the provider."""
 
 
 class UnreachableSource(ExtractorError):
