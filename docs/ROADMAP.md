@@ -1,386 +1,304 @@
-🛣 IA-HASH · Roadmap oficial
-
-Este roadmap define todas las fases necesarias para construir IA-HASH desde la primera versión funcional (v1.0) hasta la visión completa del estándar (v3+).
-Está diseñado para ser simple, modular y ejecutable, con prioridad total a:
-
-claridad
-
-robustez criptográfica
-
-rendimiento
-
-neutralidad del estándar
-
-facilidad de adopción
-
-🚀 FASE 1 — v1.0 (Completada / estabilizando)
-
-El objetivo de esta fase es obtener un sistema funcional de emisión y verificación IA-HASH, usable tanto por humanos como por sistemas.
-
-✅ 1. Arquitectura base
-
-Reorganización del repo: /iahash, /api, /web, /docs, /scripts.
-
-Limpieza de módulos, imports y dependencias.
-
-Estructura estándar de librería Python.
-
-Claves Ed25519 + issuer.
-
-Estándar JSON IAHASH-1.
-
-✅ 2. Emisión IA-HASH ("Issuer")
-
-Normalización de prompt, respuesta y contexto.
-
-Hash SHA256: h_prompt, h_respuesta.
-
-Construcción de h_total.
-
-Firma Ed25519 (firma_total).
-
-Generación del paquete IA-HASH.
-
-✅ 3. Verificador offline
-
-Re-cálculo de hashes.
-
-Verificación de la firma.
-
-Validación de consistencia.
-
-✅ 4. UI Mínima funcional
-
-Página única para emitir.
-
-Página única para verificar.
-
-Interfaz limpia, inspirada en Flarum + diseño “neutral técnico”.
-
-Copiar JSON.
-
-Descarga JSON.
-
-🔧 Pendiente menor (1.0.x)
-
-Mejoras visuales.
-
-Mejorar mensajes de error.
-
-Refinar estados VALID / INVALID / WARNING.
-
-Sanitizar inputs.
-
-🧭 FASE 2 — v1.1 (En construcción)
-
-Aquí construimos la versión “utilizable para el mundo real”: master prompts, secuencias, exportaciones, plantillas y soporte multi-modelo.
-
-🎯 Objetivo general
-
-Convertir IA-HASH en una herramienta práctica para:
-
-CVs
-
-informes
-
-análisis
-
-diagnósticos personales
-
-auditorías técnicas
-
-educación
-
-contenido profesional
-
-🔹 1. Master Prompts (v1.1 core)
-
-Implementar prompts oficiales IA-HASH “certificados”:
-
-CV Honesto v1
-
-Análisis psicológico (no clínico)
-
-Autoevaluación profesional
-
-Auditoría técnica básica
-
-Requisitos:
-
-Editable en UI y API.
-
-Guardado directo en JSON.
-
-Versión y hash propios (PROMPT-ID).
-
-Compatible con cualquier LLM.
-
-🔹 2. Sistema de Secuencias (Prompt Flow IA-HASH)
-
-Permite generar:
-
-Un único IA-HASH para una secuencia de pasos.
-
-O varios IA-HASH encadenados (1 por paso).
-
-Ideal para análisis largos o CVs evolutivos.
-
-MVP:
-
-UI para añadir pasos.
-
-API para recibir steps[].
-
-IA-HASH final incluye:
-
-n_steps
-
-hash_steps[]
-
-h_total_sequence
-
-🔹 3. Módulo “Conversación → IA-HASH”
-
-Extracto verificable de una conversación completa con un LLM.
-
-Opciones:
-
-Seleccionar mensajes manualmente
-
-Auto-resume
-
-Export completo
-
-Resultado:
-
-IAHASH-CONVERSATION-1
-h_conversation
-h_prompt
-h_respuesta
-firma_total
-
-🔹 4. Exportaciones
-
-JSON (actual)
-
-TXT (raw text + IA-HASH footer)
-
-Markdown
-
-IA-HASH Lite (formato compacto, 1 línea)
-
-Para el futuro: PDF con sello IA-HASH
-
-🔹 5. Verificador avanzado (v1.1)
-
-Validación estructural JSON
-
-Explicación de diferencias si se detectan
-
-Vista previa del contenido normalizado
-
-Colores semáforo (OK / WARNING / INVALID)
-
-Enlace para comparar con fuente original
-
-🧱 FASE 3 — v2.0 (Estándar completo)
-
-IA-HASH deja de ser solo una librería: se convierte en un protocolo estándar.
-
-🌐 1. Especificación oficial (Specs v2)**
-
-Documento completo que describe:
-
-Normalización
-
-Algoritmos
-
-Firmas
-
-Campos obligatorios/opcionales
-
-Versionado
-
-Compatibilidad
-
-Reglas de interoperabilidad
-
-Formato:
-/docs/specs/IAHASH-v2.md
-
-🧩 2. SDK oficial
-
-Lenguajes objetivo:
-
-Python
-
-JavaScript
-
-Rust
-
-Go
-
-Incluye:
-
-Normalización
-
-Hashing
-
-Firma
-
-Validación
-
-Utilidades de prompts
-
-🪪 3. Identidad delegada
-
-Permite que:
-
-Empresas
-
-Universidades
-
-Instituciones
-
-Actúen como issuers verificados bajo su propia clave.
-
-Útil para:
-
-Exámenes
-
-Auditorías
-
-Certificaciones profesionales
-
-Laboratorios IA
-
-📚 4. Repositorio de plantillas IA-HASH
-
-Repositorio público con plantillas oficiales y comunitarias:
-
-CVs
-
-diagnósticos
-
-marcos analíticos
-
-informes
-
-cursos
-
-exámenes
-
-pruebas técnicas
-
-🔍 5. Extensión multimodal (texto + imagen + audio)
-
-Generar hashes de:
-
-imágenes
-
-waveform
-
-embeddings
-
-Ejemplo futura versión:
-
-h_image
-h_audio
-h_text
-h_total
-firma_total
-
-🛡 FASE 4 — v3.0 (Ecosistema IA-HASH)
-
-La visión final: IA-HASH como estándar cultural, técnico y social.
-
-🌍 1. IA-HASH Registry (opcional)
-
-Registro público y descentralizado
-
-Para IA-HASHs que quieran hacerse públicos
-
-Similar a un DOI para IA generada
-
-🔗 2. Integración con blockchain (opcional)
-
-Para proyectos que requieran inmutabilidad absoluta
-
-No obligatorio
-
-Módulo complementario
-
-👥 3. Comunidad IA-HASH
-
-Chat público
-
-Documentación colaborativa
-
-Mejora de propuestas (IAH-Ps, tipo RFCs)
-
-Extensiones del protocolo
-
-📦 4. IA-HASH Cloud (opcional, open-source)
-
-Self-hosted
-
-Gestión de claves
-
-Emisiones firmadas
-
-Backups
-
-Auditorías
-
-🧲 ALCANCE DEL MVP COMPLETO (lo que Codex debe construir ya)
-Backend
-
-Issuer completo
-
-Verificador completo
-
-Normalización robusta
-
-Firmas Ed25519
-
-API pública /issue, /verify
-
-Master prompts
-
-Secuencias
-
-Conversación → IA-HASH
-
-Exportadores
-
-Frontend
-
-Panel unificado
-
-UI moderna y neutral (inspiración Flarum)
-
-Editor avanzado de prompts
-
-Constructor de secuencias
-
-Verificador comparativo
-
-Documentación integrada
-
-DevOps
-
-Docker
-
-Healthcheck correcto
-
-Variables env
-
-Soporte Coolify
-
-Clave pública accesible
-
-🏁 Conclusión
-
-IA-HASH no es una aplicación.
-No es una web.
-Es un estándar.
+# IA-HASH Roadmap — Version 2.0
+A clean, universal, provider-independent evolution of the IA-HASH protocol.
+
+This document describes:
+- Where IA-HASH comes from (v1.x)
+- Why v2.0 exists
+- What v2.0 delivers
+- The future direction of the protocol and ecosystem
+
+---
+
+## 1. Background: What IA-HASH Was in v1.x
+
+IA-HASH began as a system to verify **prompt + response** pairs generated by AI models.  
+Versions 1.0–1.2 introduced:
+
+- A protocol based on SHA-256 and Ed25519 signatures  
+- Two modes:  
+  - **PAIR** (manual prompt + response)  
+  - **CONVERSATION** (extraction from LLM shared URLs)  
+- Extractors for ChatGPT share links  
+- A multiple-page web UI  
+- A SQLite database for prompts/sequences  
+- HMAC-based prompt validation  
+- Notarization of prompt–response integrity
+
+The concept worked, but the architecture became:
+- Too LLM-centric  
+- Dependent on OpenAI/Claude backend APIs for authenticity  
+- Complex and hard to extend cleanly  
+- Confusing for contributors (too many concepts, mixed layers)
+
+However, the **core idea** hidden underneath was far more general:
+
+> IA-HASH is fundamentally a protocol for verifying the integrity of a *relationship between two elements*.
+
+This insight is what leads to v2.0.
+
+---
+
+## 2. Philosophy of IA-HASH v2.0
+
+Version 2.0 reframes IA-HASH into its true form:
+
+> **IA-HASH v2.0 is a universal cryptographic protocol for verifying a Pair (PAR 1, PAR 2).**
+
+This Pair can represent any meaningful relationship:
+
+- Text + Text  
+- File + File  
+- Contract + Company  
+- Author + Work  
+- Scientist + Report  
+- Original + Translation  
+- Code + Commit Message  
+- Prompt + Response  
+- Dog + Owner  
+- Property + Owner  
+- Document + Signer  
+- etc.
+
+### Core principles of v2
+- Provider-agnostic  
+- AI-agnostic  
+- Minimal, elegant, auditable core  
+- Strong separation of concerns  
+- Extensible via adapters  
+- Web/API fully rewritten and simplified  
+- v1.x preserved in `legacy/` (nothing lost, but not blocking progress)
+
+---
+
+## 3. Goals of IA-HASH v2.0
+
+### 3.1. Protocol Goals
+- Define the **IAHASH-2.0** specification  
+- Introduce generic fields:  
+  - `par1`, `par2`  
+  - `par1_hash`, `par2_hash`, `pair_hash`  
+- Establish a canonical document structure  
+- Define verification rules and error codes  
+- Keep cryptography simple and robust: SHA-256 + Ed25519
+
+### 3.2. Architecture Goals
+- Create a new clean tree:
+iahash/
+  core/        → protocol, hashing, signing, verification
+  adapters/    → integrations (ChatGPT, Claude, files…)
+  storage/     → optional DB layer
+  api/           → minimal FastAPI (v2)
+  web/           → single-page UI
+  legacy/        → all v1.x functionality
+  docs/          → v2 documentation
+
+### 3.3. Product Goals
+- Replace multi-page UI with a **single clean landing page**:
+  - What is IA-HASH?
+  - Issue a Pair (PAR 1 / PAR 2)
+  - Verify an IA-HASH document
+  - Links to Docs & GitHub
+  - Section: “LLM Authenticity — Coming Soon”
+
+- Provide a stable, easy-to-understand MVP  
+- Enable contributors to join without confusion  
+- Prepare future integration layers cleanly
+
+---
+
+## 4. What Changes from v1.2 to v2.0
+
+### 4.1. The Protocol
+**v1.2** was oriented around:
+- prompt  
+- response  
+- h_prompt  
+- h_response  
+- h_total  
+- model metadata  
+- conversation URLs  
+
+**v2.0** replaces all AI-centric logic with a general Pair structure:
+- `par1`: raw element 1 (text or file ref)  
+- `par2`: raw element 2  
+- `par1_hash`  
+- `par2_hash`  
+- `pair_hash`  
+- generic metadata block  
+- issuer signature  
+- no assumptions about AI providers
+
+### 4.2. The Architecture
+**v1.2** mixed:
+- core hashing logic  
+- extractors  
+- prompts & sequences  
+- UI & backend  
+- database schema tied to prompts  
+
+**v2.0** introduces strict modular separation:
+- `core` → protocol logic only  
+- `adapters` → extractors (optional)  
+- `api` → minimal FastAPI  
+- `web` → minimal UI  
+- `legacy` → everything v1.2 preserved
+
+### 4.3. Deployment & Tooling
+Nothing changes for deployment:
+- Same Dockerfile  
+- Same Coolify service  
+- Only branch changes from `v1.2` → `v2` when ready  
+
+This keeps integration friction near zero.
+
+---
+
+## 5. Deliverables for Version 2.0
+
+### 5.1. Core Package (`iahash/core`)
+- `Pair` model  
+- text normalization  
+- hashing system  
+- Ed25519 signing and verification  
+- IA-HASH document builder  
+- verification engine  
+- error classes and codes  
+- protocol constants  
+
+### 5.2. API (`api/main.py`)
+Endpoints:
+
+- `POST /api/issue/pair`  
+  → Create IA-HASH document from PAR 1 + PAR 2  
+- `POST /api/verify`  
+  → Verify full IA-HASH document  
+- `GET /public-key`  
+  → Public Ed25519 key of issuer  
+- `GET /health`  
+  → Status check  
+
+### 5.3. Web (Single Page)
+- Modern, simple landing page  
+- Issue Pair form  
+- Verify IA-HASH form  
+- “Coming Soon: LLM Authenticity” section  
+- Links to documentation and GitHub  
+
+### 5.4. Documentation
+- `PROTOCOL_2.0.md`  
+- `ARCHITECTURE_2.0.md`  
+- `ROADMAP_v2.md` (this file)  
+- `PAIRS_SPEC.md`  
+- Updated `README.md` (English, concise, developer-friendly)
+
+### 5.5. Legacy Preservation
+A new folder:
+legacy/
+  api_v1/
+  iahash_v1/
+  web_v1/
+  docs_v1/
+  db_v1/
+
+All v1.x functionality remains untouched for reference.
+
+---
+
+## 6. Future Roadmap Beyond v2.0
+
+### 6.1. v2.1 — File-Based Pairs
+- Support binary hashing  
+- Upload interface for PAR 1 / PAR 2  
+- Mixed text+file support  
+- Metadata: MIME, byte length, checksum mode  
+
+### 6.2. v2.2 — LLM Authenticity (when provider access is granted)
+This unlocks the original dream:
+
+- Fetch real conversation JSON from OpenAI/Claude backend APIs  
+- Extract canonical prompt + response  
+- Compare with user-provided Pair  
+- Produce authenticated IA-HASH certificates  
+- Detect manipulation or editing  
+- Validate true origin of LLM outputs  
+
+(Dependent on Cloudflare/OpenAI/Anthropic lifting restrictions.)
+
+### 6.3. v2.3 — Adapter Ecosystem
+- Expand `adapters/` with:
+  - URL resolvers  
+  - File loaders  
+  - Git commit extractors  
+  - S3 object adapters  
+  - OCR-to-text pipelines  
+
+### 6.4. v3.0 — Identity Layer (IHID)
+- Each user can generate their own keypair  
+- Dual-signature model:
+  - User signs Pair  
+  - IA-HASH (issuer) co-signs the certificate  
+- Public registries  
+- Revocation entries  
+- Trust chains  
+
+This enables:
+- Authorship  
+- Ownership  
+- Legal signatures  
+- Academic certification  
+- Digital notarization  
+
+### 6.5. v3.x — SDKs & CLI Tools
+- Python SDK  
+- JS/Node SDK  
+- Rust/Go clients  
+- `iahctl` CLI tool  
+- Integrations with workflow engines (n8n, Temporal, etc.)
+
+---
+
+## 7. Project Status (Dec 2025)
+
+### Stable branch: `v1.2`
+- Fully functional  
+- Feature-heavy  
+- Architecture mixed  
+- AI-centric  
+- Hard to extend cleanly  
+
+### Development branch: `v2`
+- Clean architecture  
+- Universal Pair protocol  
+- Minimal API  
+- Single-page UI  
+- Legacy preserved  
+
+### Production deployment
+Once v2 reaches stability, Coolify can deploy it by simply switching branch.
+
+---
+
+## 8. Vision for IA-HASH
+
+> IA-HASH is a universal integrity protocol for relationships between two meaningful elements.  
+>  
+> It is small, elegant, cryptographic, auditable, and provider-independent.  
+>  
+> The simplicity of Pairs unlocks a wide range of use cases:  
+> technical, legal, scientific, personal, creative, and AI-related.
+
+v2.0 is not a step backward —  
+it is the moment where IA-HASH **discovers its true form**.
+
+---
+
+## 9. Summary
+
+- IA-HASH evolves from “prompt+response verifier” to **universal Pair verification protocol**.  
+- Architecture is cleaned, modular, and extensible.  
+- Web/UI is simplified.  
+- Legacy is preserved, not discarded.  
+- Future-proof integrations will plug in cleanly when possible.  
+- v2 is the foundation for everything that comes next.
+
+**IA-HASH v2.0 = clarity, simplicity, universality, future-proofness.**
