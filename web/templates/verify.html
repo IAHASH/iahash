@@ -3,14 +3,14 @@
 {% block content %}
   <div class="section">
     <p class="pill">Verificación IA-HASH</p>
-    <h2>Pair, Prompt+URL y Checker</h2>
-    <p class="muted">Elige el flujo adecuado para generar o validar artefactos IA-HASH.</p>
+    <h2>Par directo, Prompt+URL y PK</h2>
+    <p class="muted">Elige el flujo adecuado para validar un par texto/IA, una conversación de ChatGPT o una firma con PK URL.</p>
   </div>
 
   <div class="tabs">
     <button class="tab active" data-target="pair" onclick="showTab('pair')">Pair</button>
     <button class="tab" data-target="prompt-url" onclick="showTab('prompt-url')">Prompt+URL</button>
-    <button class="tab" data-target="checker" onclick="showTab('checker')">Checker</button>
+    <button class="tab" data-target="checker" onclick="showTab('checker')">Firma / PK URL</button>
   </div>
 
   <div class="tab-content" id="tab-pair">
@@ -19,7 +19,7 @@
         <div>
           <div class="badge">Pair</div>
           <h3>Prompt + Respuesta</h3>
-          <p class="muted">Genera un IA-HASH con el texto exacto enviado a la IA y su salida.</p>
+          <p class="muted">Verifica un par directo (prompt + respuesta) sin URL externas.</p>
         </div>
       </div>
       <form class="form-grid" id="pair-form">
@@ -57,25 +57,33 @@
         <div>
           <div class="badge">Prompt+URL</div>
           <h3>Conversación compartida</h3>
-          <p class="muted">Selecciona un prompt maestro y pega el enlace del chat a verificar.</p>
+          <p class="muted">Selecciona un prompt maestro o pega el texto, y verifica una URL de conversación de ChatGPT.</p>
         </div>
       </div>
       <form class="form-grid" id="conversation-form">
         <label class="field-block">
           <span class="field-label">Prompt maestro</span>
-          <select id="prompt-slug" class="input">
-            <option value="">(opcional) Selecciona prompt maestro</option>
-            {% for prompt in prompts %}
-              <option value="{{ prompt.id }}" data-slug="{{ prompt.slug }}" data-h-public="{{ prompt.h_public or '' }}">{{ prompt.title }}</option>
-            {% endfor %}
-          </select>
-          <p class="muted" id="prompt-meta" style="margin-top:6px;">
-            <strong>Slug:</strong> <span data-meta="slug">—</span> · <strong>h_public:</strong> <span data-meta="h-public">—</span>
-          </p>
+          {% if prompts %}
+            <select id="prompt-slug" class="input">
+              <option value="">(opcional) Selecciona prompt maestro</option>
+              {% for prompt in prompts %}
+                <option value="{{ prompt.id }}" data-slug="{{ prompt.slug }}" data-h-public="{{ prompt.h_public or '' }}">{{ prompt.title }}</option>
+              {% endfor %}
+            </select>
+            <p class="muted" id="prompt-meta" style="margin-top:6px;">
+              <strong>Slug:</strong> <span data-meta="slug">—</span> · <strong>h_public:</strong> <span data-meta="h-public">—</span>
+            </p>
+          {% else %}
+            <p class="muted">No hay prompts públicos todavía. Pega tu prompt manualmente abajo.</p>
+          {% endif %}
         </label>
         <label class="field-block">
-          <span class="field-label">URL del chat</span>
-          <input id="conv-url" class="input" placeholder="https://chatgpt.com/share/..." />
+          <span class="field-label">Prompt pegado (opcional)</span>
+          <textarea id="prompt-manual" class="input" rows="5" placeholder="Si no eliges un maestro, pega aquí el prompt usado en el chat."></textarea>
+        </label>
+        <label class="field-block">
+          <span class="field-label">URL de conversación ChatGPT</span>
+          <input id="conv-url" name="url_chatgpt" class="input" placeholder="https://chatgpt.com/share/..." title="Enlace público de chatgpt.com/share/…" />
         </label>
         <div class="field-row">
           <label class="field-block">
@@ -108,15 +116,19 @@
     <div class="card">
       <div class="section-header">
         <div>
-          <div class="badge">Checker</div>
-          <h3>Valida un JSON IA-HASH</h3>
-          <p class="muted">Pega el documento generado y confirma la integridad de hashes y firma.</p>
+          <div class="badge">PK URL</div>
+          <h3>Verificación de firma</h3>
+          <p class="muted">Pega el documento IA-HASH firmado y la URL de clave pública (PK URL) del emisor.</p>
         </div>
       </div>
       <form class="form-grid" id="checker-form">
         <label class="field-block">
           <span class="field-label">IA-HASH JSON</span>
           <textarea id="checker-json" class="input" rows="10" placeholder='{"iah_id":"...","h_total":"..."}'></textarea>
+        </label>
+        <label class="field-block">
+          <span class="field-label">URL de clave pública (PK URL)</span>
+          <input id="checker-pk-url" name="pk_url" class="input" placeholder="https://iahash.com/keys/issuer_ed25519.pub" title="No es una URL de conversación; apunta a la clave pública del emisor." />
         </label>
         <div class="field-row">
           <div class="field-block">

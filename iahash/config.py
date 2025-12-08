@@ -12,10 +12,11 @@ IAHASH_BASE_URL = os.getenv("IAHASH_BASE_URL", "http://localhost:8000")
 # Identificador del emisor local utilizado en los documentos IA-HASH
 ISSUER_ID = os.getenv("IAHASH_ISSUER_ID", "iahash.local")
 
-# URL pública de la clave del emisor utilizada en los documentos IA-HASH
+# URL pública de la clave del emisor utilizada en los documentos IA-HASH.
 #
-# Por defecto apuntamos al host oficial; se puede forzar a None dejando la
-# variable vacía ("") o sobreescribirla con la URL pública deseada.
+# Se usa la PK oficial de IA-HASH por defecto, pero se puede sobreescribir con
+# IAHASH_ISSUER_PK_URL para entornos locales (ej. iahash.local). Esta URL NO es
+# una URL de conversación: apunta al PEM público del emisor.
 _env_pk_url = os.getenv("IAHASH_ISSUER_PK_URL")
 if _env_pk_url is not None and not _env_pk_url.strip():
     _env_pk_url = None

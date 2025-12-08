@@ -100,7 +100,9 @@ function updatePromptMeta() {
 
 async function submitConversation() {
   const shareUrl = document.getElementById("conv-url").value;
-  const promptId = document.getElementById("prompt-slug")?.value || null;
+  const promptId =
+    (document.getElementById("prompt-slug")?.value || "").trim() || null;
+  const manualPrompt = (document.getElementById("prompt-manual")?.value || "").trim();
   const provider = document.getElementById("conv-provider")?.value || "chatgpt";
   const model = document.getElementById("conv-model")?.value || "unknown";
 
@@ -110,6 +112,13 @@ async function submitConversation() {
 
   renderLoading(resultContainer, "Verificando URL y generando IA-HASH…");
   logEl.textContent = "Enviando…";
+
+  if (!promptId && !manualPrompt) {
+    const detail = "Selecciona un prompt maestro o pega el texto exacto usado.";
+    renderError(resultContainer, { message: detail });
+    logEl.textContent = detail;
+    return;
+  }
 
   if (!isValidChatGPTShare(shareUrl || "")) {
     const detail = "URL inválida. Usa un enlace de chatgpt.com/share.";
@@ -129,6 +138,7 @@ async function submitConversation() {
         provider,
         share_url: shareUrl,
         model,
+        prompt_text: promptId ? null : manualPrompt,
       }),
     });
 
