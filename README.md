@@ -1,209 +1,199 @@
-# IA-HASH: Documento Maestro del Proyecto (v1.2)
 
-## 🧭 Resumen Ejecutivo
 
-IA-HASH es un protocolo abierto y sistema software diseñado para verificar la **autenticidad, integridad y contexto** de contenidos generados por modelos de lenguaje (LLMs). Permite firmar outputs de IA de forma verificable, usando criptografía moderna y estructuras estandarizadas.
+````markdown
+# IA-HASH: Universal Pair Verification Protocol v2.0
 
-Se puede integrar fácilmente en cualquier pipeline de generación o consulta, y su objetivo final es **crear un estándar universal de confianza** para los contenidos generados por IA.
+> A tiny, universal cryptographic protocol for verifying **Pairs** – relationships between two meaningful elements.
 
-## 🧩 Filosofía y Motivación
+![IA-HASH logo](web/static/logo.png)
 
-* **Confianza en entornos post-generativos:** IA-HASH permite demostrar que una IA específica generó cierto contenido, bajo cierto contexto, y que este no ha sido modificado.
-* **Modelo agnóstico:** Compatible con cualquier IA, proveedor o sistema.
-* **Abierto, verificable y simple:** Todo está basado en estructuras públicas y sin dependencias propietarias.
-* **Fácil de usar:** Ideal tanto para aplicaciones web como para CLI o integraciones con LLMOps.
-
-## 📜 Especificación del Protocolo (v1.2)
-
-### Formato del Documento IA-HASH (simplificado):
-
-```json
-{
-  "protocol_version": "IAHASH-1.2",
-  "iah_id": "...",
-  "timestamp": "...",
-  "prompt_id": "...",
-  "type": "PAIR | CONVERSATION",
-  "mode": "LOCAL | TRUSTED_URL",
-  "h_prompt": "...",
-  "h_response": "...",
-  "h_total": "...",
-  "model": "gpt-4",
-  "issuer_id": "iahash.local",
-  "issuer_pk_url": "http://localhost:8000/keys/issuer_ed25519.pub",
-  "signature": "...",
-  "prompt_hmac_verified": true,
-  "subject_id": "...",
-  "conversation_url": "...",
-  "provider": "OpenAI",
-  "store_raw": false,
-  "raw_prompt_text": null,
-  "raw_response_text": null
-}
-```
-
-* Hashes SHA256 normalizados (`h_prompt`, `h_response`, `h_total`).
-* Firma Ed25519 de `h_total` y metadatos con la clave privada local.
-* Verificación offline o vía endpoint `/api/check`.
-* `prompt_hmac_verified` indica que el documento referencia un `prompt_id` registrado; el HMAC real se delega a la tabla `prompts`.
-* `store_raw` determina si los textos planos se conservan en base de datos; por defecto son `null` para proteger privacidad.
-
-## 🏗️ Arquitectura del Sistema
-
-```
-[User] → [Web UI (Jinja)] → [FastAPI Backend]
-                        ↘
-           [Extractores (ChatGPT share)]
-                          ↓
-                 [issuer.py / verifier.py]
-                          ↓
-               [SQLite (db/schema.sql)]
-                          ↓
-                [JSON firmado + clave pública]
-```
-
-* Backend: `FastAPI` (API + vistas HTML), firmado en tiempo real vía `issuer.py`.
-* Frontend: plantillas Jinja y estáticos en `web/templates` y `web/static`.
-* Base de datos: SQLite (`db/schema.sql`, auto-init en startup) gestionada por `iahash/db.py`.
-* Claves: Ed25519 en `/data/keys/issuer_ed25519.private|pub`, generadas por `start.sh` si no existen.
-* Stateless: el documento firmado es autosuficiente; la BD solo almacena histórico y prompts.
-
-## 🔁 Flujo de Emisión
-
-1. Usuario genera texto con IA
-2. App llama a `/api/verify/pair` o `/api/verify/conversation`
-3. Se calculan hashes de entrada y salida
-4. Se construye documento IA-HASH completo
-5. Se firma y se almacena (opcional)
-6. Se devuelve JSON verificable
-
-## ✅ Flujo de Verificación
-
-1. Cliente recibe documento `.json`
-2. Llama a `/api/check` con el contenido
-3. Servidor valida:
-
-   * Hashes
-   * Firma
-   * Clave pública
-   * Prompt HMAC (si aplica)
-4. Devuelve resultado `ok | invalid | tampered`
-
-## 🌐 API (Endpoints)
-
-```http
-GET    /                → Web (index)
-GET    /api             → Info general
-GET    /health          → Healthcheck
-POST   /api/verify/pair → Genera IA-HASH (prompt + respuesta local)
-POST   /api/verify/conversation → Genera IA-HASH desde URL de conversación (ChatGPT share)
-POST   /api/check       → Verifica un documento IA-HASH existente
-GET    /verify          → UI de emisión/verificación manual
-GET    /compare         → UI de comparación
-GET    /prompts         → Lista de prompts (HTML)
-GET    /prompts/{slug}  → Detalle de prompt (HTML)
-GET    /sequences       → Lista de secuencias (HTML)
-GET    /sequences/{slug}→ Detalle de secuencia (HTML)
-GET    /iah/{id}        → Consulta un documento emitido (HTML)
-GET    /public-key      → Clave pública en JSON
-GET    /keys/issuer_ed25519.pub → Clave pública PEM
-```
-
-## 🗃️ Base de Datos
-
-Esquema SQLite (`schema.sql`) contiene:
-
-* `prompts`: prompts base con HMAC opcional y slug público.
-* `iahash_documents`: documentos emitidos (JSON completo; `raw_*` solo si `store_raw=1`).
-* `sequences` y `sequence_steps`: flujos guiados y sus pasos.
-
-La inicialización es automática en arranque (`ensure_db_initialized`), apuntando por defecto a `db/iahash.db`.
-
-## 🔐 Seguridad: Claves, Hashes, Firmas
-
-* Firmas Ed25519 con clave privada generada en arranque (`/data/keys/issuer_ed25519.private`).
-* Verificación con clave pública (`/data/keys/issuer_ed25519.pub` o `/public-key`).
-* SHA256 para todos los textos
-* Documentos firmados incluyen metainformación del firmante
-
-## 🖥️ Web: Funcionalidad, UI y Roadmap
-
-Frontend muy simple:
-
-* `index.html` → bienvenida e info
-* `verify.html` → emisión/validación manual
-* `compare.html` → comparación de IA-HASH
-* `prompts.html`, `prompt_detail.html`, `sequences.html`, `sequence_detail.html`, `docs.html` → navegación de contenidos
-* `styles.css` → estilo
-* `logo.png` → marca
-
-Próximas mejoras:
-
-* Visualizador y verificador desde navegador
-* Upload de JSON y validación visual
-
-## 🧠 Glosario
-
-* **IAH Document**: JSON verificable que representa un output IA firmado
-* **HMAC Prompt**: Verificación extra del prompt base
-* **Issuer**: Entidad que firma (modelo, organización, etc.)
-* **Hash**: SHA256 de entrada/salida
-* **Raw text**: Prompt/response/contexto en texto plano
-
-## ✅ Checklist de Conformidad IA-HASH
-
-* [x] Usa protocolo v1.2 o superior
-* [x] Incluye `iah_id`, hashes, modelo, timestamp
-* [x] Incluye firma Ed25519
-* [x] Incluye URL de clave pública
-* [x] Incluye contexto opcional (prompt, conversación, sujeto)
-
-## 🚧 Roadmap Futuro
-
-* [ ] Firma externa por terceros
-* [ ] Modo "verificación federada"
-* [ ] Backends alternativos (PostgreSQL, Redis)
-* [ ] Plugins para LLMs y notebooks
-* [ ] Portal público de verificación
-
-## 📎 Apéndices
-
-### A. Clave Pública (JSON)
-
-```json
-{
-  "issuer_pk_url": "/keys/issuer_ed25519.pub",
-  "pem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
-}
-```
-
-### B. IA-HASH de ejemplo
-
-```json
-{
-  "iah_id": "IAH:20251205:XYZ123",
-  "protocol_version": "IAHASH-1.2",
-  "type": "PAIR",
-  "mode": "LOCAL",
-  "model": "gpt-4.1",
-  "h_prompt": "...",
-  "h_response": "...",
-  "h_total": "...",
-  "issuer_id": "IAHASH:001",
-  "signature": "base64...",
-  ...
-}
-```
-
-### C. Manual de verificación rápida
-
-1. Borrar cualquier base de datos previa: `rm -f db/iahash.db`.
-2. Levantar el servidor (`uvicorn api.main:app --reload` o el stack Docker).
-3. Abrir `/prompts` y confirmar que aparece **CV Honesto Cognitivo**.
-4. Ir a `Verificar > Prompt+URL`, seleccionar el prompt `cv` y pegar una URL `chatgpt.com/share/...` de prueba.
-5. Copiar el JSON IA-HASH generado y pegarlo en el tab **Checker**.
-6. Verificar que el resultado es válido y que no aparece el error “Missing issuer_pk_url and issuer_id does not match local issuer”.
+IA-HASH turns “this belongs to that” into a verifiable, signed fact. It does not care if the pair comes from AI, humans, code, contracts or files — it only cares about **integrity** and **proof of existence**.
 
 ---
 
-> Última revisión: 2025-12-07 — Basado en versión `v1.2`, alineado con archivos `PROTOCOL_1.2.md`, `ARCHITECTURE_1.2.md`, `db.py`, `main.py`, `issuer.py`, `ROADMAP.md` y estructura real del sistema.
+## 💡 About IA-HASH v2.0
+
+**IA-HASH** is a small, provider-agnostic protocol and reference implementation that lets you:
+
+* Take two elements – **PAR 1** and **PAR 2**
+* Normalize, hash, and combine them into a single `pair_hash`
+* Wrap the hashes into a **signed IA-HASH document**
+* Verify that document anywhere, independently of any provider
+
+It started as a way to verify **AI prompt + response** pairs, and has successfully evolved into a **general-purpose Pair verification standard**.
+
+---
+
+## 🤝 Why Pairs? (The Core Idea)
+
+Many critical relationships in the digital and real world are fundamentally just Pairs:
+
+* **LLM Authenticity:** Prompt + Response (The origin)
+* **Legal:** Contract + Company
+* **Academic:** Scientist + Report
+* **Media:** Original + Translation
+* **Software:** Code + Commit Message
+* **Ownership:** Property + Owner
+* **Signature:** Document + Signer
+
+IA-HASH v2.0 focuses on this core concept:
+
+> “Given PAR 1 and PAR 2, prove that this specific relationship was registered by an issuer at a given time, and has not been tampered with since.”
+
+---
+
+## ✨ Key Features
+
+* **Delightfully Small Core:** Minimal Python package under `iahash/core/` handles:
+    * Pair model, hashing, and normalization
+    * Ed25519 signing and verification
+    * IA-HASH document builder and verifier
+* **Provider-Agnostic:** The core works with human-written text, files (v2.1+), AI outputs, or any system that can produce bytes.
+* **Clear JSON Document Format:** IA-HASH documents are simple JSON: easy to store, share, diff, and audit.
+* **Minimal API & UI:** A tiny FastAPI backend and a clean, single-page web UI simplify interaction.
+* **Legacy Preserved:** All v1.x code (prompts, sequences, LLM extractors, etc.) lives in `legacy/` for historical reference.
+
+---
+
+## 📄 Example IA-HASH Document (v2.0, simplified)
+
+```json
+{
+  "protocol_version": "IAHASH-2.0",
+  "issuer_id": "iahash.com",
+  "timestamp": "2025-12-08T20:00:00Z",
+
+  "par1_hash": "a1f5…",
+  "par2_hash": "b7c9…",
+  "pair_hash": "d3e4…",
+
+  "signature": "f1a2…",
+  "metadata": {
+    "label": "contract + company",
+    "notes": "Optional metadata goes here"
+  }
+}
+````
+
+> **Note:** The IA-HASH document contains the cryptographic proof. You keep **PAR 1** and **PAR 2** privately. Anyone with the document and the original Pair can verify: (1) that neither element has changed, and (2) that the issuer actually signed this Pair.
+
+-----
+
+## 🚀 Quick Start
+
+### Run with Docker
+
+```bash
+# From the repository root
+docker build -t iahash:v2 .
+docker run --rm -p 8000:8000 iahash:v2
+```
+
+The application will be available at:
+
+  * `http://localhost:8000` (Web UI)
+  * `http://localhost:8000/docs` (FastAPI documentation)
+
+### Run Locally (Python)
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# Keys must be set for signing
+export IAHASH_PRIVATE_KEY_PATH=keys/issuer_private.key
+export IAHASH_PUBLIC_KEY_PATH=keys/issuer_public.key
+
+uvicorn api.main:app --reload
+```
+
+> **Note:** Keys/ issuer\_private.key and keys/ issuer\_public.key must be present or generated before running the application.
+
+-----
+
+## 🛠 Basic API Usage
+
+### 1\. Issue a Pair
+
+`POST /api/issue/pair`
+
+```json
+{
+  "par1": "This is element A (e.g., the Prompt)",
+  "par2": "This is element B (e.g., the Response)",
+  "metadata": {
+    "label": "example",
+    "notes": "Optional free-form metadata"
+  }
+}
+```
+
+### 2\. Verify a Document
+
+`POST /api/verify`
+
+```json
+{
+  "iah_document": { "...": "IA-HASH JSON document" },
+  "par1": "This is element A (original)",
+  "par2": "This is element B (original)"
+}
+```
+
+**Response Status:** `status: "VALID"` or `status: "INVALID"`, with detailed errors if validation fails (hash mismatch, signature error, etc.).
+
+-----
+
+## 🌲 Project Structure (v2.0)
+
+```
+iahash/
+  ├── core/          # 🥇 Protocol, hashing, signing, verification (The kernel)
+  ├── adapters/      # Future integrations (LLMs, files, URLs…)
+  ├── storage/       # Optional DB helpers
+├── api/
+  └── main.py        # FastAPI app (Minimal interface)
+├── web/
+  ├── templates/     # Single-page UI templates
+  └── static/
+├── legacy/          # 🕰️ All v1.x code is preserved here (for reference)
+  └── api_v1/, iahash_v1/, web_v1/, db_v1/ ...
+├── docs/
+  └── PROTOCOL_2.0.md, ARCHITECTURE_2.0.md, ROADMAP_v2.md, VISION.md
+```
+
+-----
+
+## 🗺 Roadmap (Short Version)
+
+| Status | Version | Focus |
+| :---: | :---: | :--- |
+| ✅ | **v2.0** | Text Pairs, minimal API & UI, clean core (Current release) |
+| ⏳ | **v2.1** | File-based Pairs (binary hashing, upload interface) |
+| ⏳ | **v2.2** | LLM Authenticity (via provider backend APIs, if access is granted) |
+| ⏳ | **v3.0** | Identity Layer (user keypairs, dual signatures, public registries) |
+| ⏳ | **v3.x** | SDKs & CLI tools (`iahctl`) |
+
+Full details: [docs/ROADMAP\_v2.md](https://www.google.com/search?q=docs/ROADMAP_v2.md).
+
+-----
+
+## ⚙ Contributing
+
+Contributions are welcome\! ✨
+
+1.  Open an issue to discuss ideas or problems.
+2.  Send a pull request targeting the `v2` branch.
+3.  Keep code small, clear, and well documented.
+4.  Follow the spirit of the project: **simple, transparent, auditable.**
+
+-----
+
+## © License
+
+IA-HASH is released under the **Apache 2**.
+
+See `LICENSE` for details.
+
+```
