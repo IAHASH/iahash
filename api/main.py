@@ -124,9 +124,15 @@ def _error_response(code: str, message: str, *, status_code: int = 400) -> JSONR
         status_code=status_code,
         content={
             "ok": False,
+            "success": False,
+            "status": "ERROR",
             "error_code": code,
             "error_message": message,
+            "reason": code,
+            "error": {"code": code, "message": message},
+            "document": None,
             "data": None,
+            "detail": message,
         },
     )
 
@@ -142,8 +148,13 @@ def _share_error_response(
         status_code=status_code,
         content={
             "ok": False,
+            "success": False,
+            "status": "ERROR",
             "error_code": reason,
             "error_message": message,
+            "reason": reason,
+            "error": {"code": reason, "message": message},
+            "detail": message,
             "data": {
                 "extracted_prompt": None,
                 "extracted_answer": None,
@@ -151,6 +162,11 @@ def _share_error_response(
                 "model": None,
                 "conversation_url": conversation_url,
             },
+            "extracted_prompt": None,
+            "extracted_answer": None,
+            "provider": None,
+            "model": None,
+            "conversation_url": conversation_url,
         },
     )
 
@@ -187,9 +203,13 @@ def _ok_response(document: Dict[str, Any], *, status: str = "ISSUED") -> Dict[st
 
     return {
         "ok": True,
+        "success": True,
         "error_code": None,
         "error_message": None,
         "status": status,
+        "reason": None,
+        "error": None,
+        "document": document,
         "data": _document_payload(document, verification),
     }
 
@@ -440,12 +460,16 @@ def api_verify_share(payload: VerifySharePayload) -> Dict[str, Any]:
 
     try:
         extracted = extract_chatgpt_share(share_url)
-    except UnsupportedProvider:
+    except UnsupportedProvider as exc:
         return _share_error_response(
-            "PARSING_FAILED", "Unsupported or unreadable ChatGPT share page"
+            "PARSING_FAILED", str(exc) or "Unsupported or unreadable ChatGPT share page"
         )
-    except UnreachableSource:
-        return _share_error_response("FETCH_FAILED", "Cannot fetch ChatGPT share URL")
+    except UnreachableSource as exc:
+        return _share_error_response(
+            "FETCH_FAILED",
+            f"Cannot fetch ChatGPT share URL: {exc}",
+            conversation_url=share_url,
+        )
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("Unexpected error verifying share URL", exc_info=exc)
         return _share_error_response(
@@ -468,8 +492,11 @@ def api_verify_share(payload: VerifySharePayload) -> Dict[str, Any]:
 
     return {
         "ok": True,
+        "success": True,
         "error_code": None,
         "error_message": None,
+        "reason": None,
+        "error": None,
         "data": {
             "extracted_prompt": prompt_text,
             "extracted_answer": response_text,
@@ -477,6 +504,11 @@ def api_verify_share(payload: VerifySharePayload) -> Dict[str, Any]:
             "model": model_value,
             "conversation_url": share_url,
         },
+        "extracted_prompt": prompt_text,
+        "extracted_answer": response_text,
+        "provider": provider,
+        "model": model_value,
+        "conversation_url": share_url,
     }
 
 
@@ -547,25 +579,41 @@ def api_check(payload: CheckRequest) -> Dict[str, Any]:
 
 @app.post("/api/issue-from-share")
 async def api_issue_from_share(payload: IssueFromSharePayload) -> Dict[str, Any]:
-    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
+    }
+    async with httpx.AsyncClient(
+        follow_redirects=True, timeout=15.0, headers=headers
+    ) as client:
         response = await client.get(str(payload.share_url))
 
     if response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Cannot fetch ChatGPT share URL")
+        raise HTTPException(
+            status_code=400,
+            detail=f"HTTP {response.status_code} when fetching ChatGPT share URL",
+        )
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    script = soup.find("script", id="__NEXT_DATA__")
-    if not script or not script.string:
+    data: Dict[str, Any] | None = None
+    try:
+        data = json.loads(response.text)
+    except json.JSONDecodeError:
+        soup = BeautifulSoup(response.text, "html.parser")
+        script = soup.find("script", id="__NEXT_DATA__")
+        if script and script.string:
+            try:
+                data = json.loads(script.string)
+            except json.JSONDecodeError:
+                data = None
+
+    if not data:
         raise HTTPException(
             status_code=400, detail="ChatGPT share page has no data to parse"
         )
-
-    try:
-        data = json.loads(script.string)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=400, detail="Cannot parse ChatGPT share payload"
-        ) from exc
 
     try:
         payload_extracted = extract_payload_from_chatgpt_share(data)
@@ -626,9 +674,13 @@ def _issue_prompt_from_url(payload: IssueFromPromptUrlPayload) -> Dict[str, Any]
     try:
         extracted = extract_chatgpt_share(share_url)
     except UnsupportedProvider as exc:
-        return _error_response("INVALID_URL", "Invalid or unsupported share URL")
+        return _error_response(
+            "INVALID_URL", str(exc) or "Invalid or unsupported share URL"
+        )
     except UnreachableSource as exc:  # pragma: no cover - network defensive
-        return _error_response("FETCH_FAILED", "Cannot fetch ChatGPT share URL")
+        return _error_response(
+            "FETCH_FAILED", f"Cannot fetch ChatGPT share URL: {exc}"
+        )
     except Exception as exc:  # pragma: no cover - defensive
         return _error_response(
             "INTERNAL_ERROR",

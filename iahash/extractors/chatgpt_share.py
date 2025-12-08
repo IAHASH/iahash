@@ -14,7 +14,7 @@ from iahash.extractors.exceptions import UnreachableSource, UnsupportedProvider
 CHATGPT_SHARE_HOSTS = {"chat.openai.com", "chatgpt.com"}
 SHARE_PATH_FRAGMENT = "/share/"
 SHARE_UUID_PATTERN = re.compile(
-    r"^/share/(?P<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/?$"
+    r"^/share/(?P<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:/)?$"
 )
 
 ERROR_UNREACHABLE = "unreachable"
@@ -34,35 +34,67 @@ __all__ = [
 
 def _validate_share_url(url: str) -> None:
     parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        raise UnsupportedProvider("Unsupported conversation provider")
+    if parsed.scheme != "https":
+        raise UnsupportedProvider(
+            "URL inválida. Debe usar https://chatgpt.com/share/... o https://chat.openai.com/share/..."
+        )
 
     hostname = (parsed.hostname or "").lower()
     if hostname not in CHATGPT_SHARE_HOSTS:
-        raise UnsupportedProvider("Unsupported conversation provider")
+        raise UnsupportedProvider(
+            "URL inválida. Debe usar chatgpt.com o chat.openai.com"
+        )
 
-    if SHARE_PATH_FRAGMENT not in parsed.path:
-        raise UnsupportedProvider("Unsupported conversation format")
+    if not parsed.path.startswith(SHARE_PATH_FRAGMENT):
+        raise UnsupportedProvider(
+            "URL inválida. La ruta debe comenzar con /share/"
+        )
 
-    path_without_query = parsed.path
-    if not SHARE_UUID_PATTERN.match(path_without_query):
+    if not SHARE_UUID_PATTERN.match(parsed.path):
         raise UnsupportedProvider("Unsupported conversation format")
 
 
 def _download_html(url: str, *, timeout: float = 15.0) -> str:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
+    }
     try:
-        response = httpx.get(url, timeout=timeout, follow_redirects=True)
+        response = httpx.get(
+            url,
+            timeout=timeout,
+            follow_redirects=True,
+            headers=headers,
+        )
         response.raise_for_status()
         return response.text
+    except httpx.HTTPStatusError as exc:  # pragma: no cover - defensive branch
+        status = exc.response.status_code if exc.response else "unknown"
+        raise UnreachableSource(
+            f"HTTP {status} when fetching ChatGPT share URL"
+        ) from exc
     except httpx.HTTPError as exc:  # pragma: no cover - defensive branch
-        raise UnreachableSource(f"Unable to download shared conversation: {exc}") from exc
+        raise UnreachableSource(
+            f"Connection error when fetching ChatGPT share URL: {exc}"
+        ) from exc
 
 
 def _parse_next_data(html: str) -> Optional[Dict]:
+    try:
+        possible_json = json.loads(html)
+        if isinstance(possible_json, dict):
+            return possible_json
+    except json.JSONDecodeError:
+        pass
+
     match = re.search(
-        r"<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>",
+        r"<script[^>]+id=\"__NEXT_DATA__\"[^>]*>(.*?)</script>",
         html,
-        re.DOTALL,
+        re.DOTALL | re.IGNORECASE,
     )
     if not match:
         return None
@@ -93,20 +125,29 @@ def _collect_messages(mapping: Dict) -> tuple[Optional[str], Optional[str]]:
 
 def _conversation_payload(data: Dict) -> Dict[str, str]:
     try:
+        page_props = data.get("props", {}).get("pageProps", {}) if isinstance(data, dict) else {}
         conversation = (
-            data["props"]["pageProps"].get("sharedConversation")
-            or data["props"]["pageProps"].get("serverResponse", {}).get("data", {})
+            page_props.get("sharedConversation")
+            or page_props.get("serverResponse", {}).get("data", {})
+            or data.get("sharedConversation")
+            or data.get("serverResponse", {}).get("data", {})
         )
     except Exception as exc:  # pragma: no cover - defensive branch
-        raise UnsupportedProvider("Unsupported conversation format") from exc
+        raise UnsupportedProvider(
+            "Could not parse ChatGPT shared conversation (missing expected fields)"
+        ) from exc
 
     if not conversation:
-        raise UnsupportedProvider("Unsupported conversation format")
+        raise UnsupportedProvider(
+            "Could not parse ChatGPT shared conversation (missing expected fields)"
+        )
 
     mapping = conversation.get("mapping") or {}
     prompt_text, response_text = _collect_messages(mapping)
     if not prompt_text or not response_text:
-        raise UnsupportedProvider("Unsupported conversation format")
+        raise UnsupportedProvider(
+            "Could not parse ChatGPT shared conversation (missing expected fields)"
+        )
 
     model = conversation.get("modelSlug") or conversation.get("model") or "unknown"
     return {
@@ -152,7 +193,9 @@ def extract_from_url(url: str) -> Dict[str, str]:
 
     next_data = _parse_next_data(html)
     if not next_data:
-        raise UnsupportedProvider("Unsupported conversation format")
+        raise UnsupportedProvider(
+            "Could not parse ChatGPT shared conversation (missing expected fields)"
+        )
 
     payload = _extract_payload(next_data)
     payload["conversation_url"] = url

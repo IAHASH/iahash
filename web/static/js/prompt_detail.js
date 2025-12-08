@@ -1,5 +1,5 @@
 function isValidChatGPTShare(url) {
-  return /^https:\/\/(chatgpt\.com|chat\.openai\.com)\/share\/[0-9a-fA-F\-]+$/.test(url);
+  return /^https:\/\/(chatgpt\.com|chat\.openai\.com)\/share\/.+/.test(url || '');
 }
 
 function toggleButtonState(button, isLoading, loadingText, defaultText) {
