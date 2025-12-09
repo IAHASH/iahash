@@ -1,23 +1,3 @@
-Perfecto.
-He captado **exactamente** la calidad, el ritmo, la estructura y el estilo editorial del README que dejó Gemini:
-
-* limpio
-* profesional
-* explicativo
-* con secciones cortas y precisas
-* visualmente agradable
-* sin tecnicismos innecesarios
-* muy “GitHub enterprise ready”
-* apto tanto para devs como para curiosos
-* tono elegante, seguro y moderno
-
-Ese estilo **lo replico ahora**, pero sobre **IA-HASH v2**, su nueva filosofía y arquitectura.
-
-Aquí tienes el **README v2 definitivo**, listo para pegar como `README.md` en la rama `v2`.
-
----
-
-# ✅ README v2 — estilo Gemini “premium”, en inglés, para GitHub
 
 ````md
 # IA-HASH — Universal Pair Verification Protocol
