@@ -260,9 +260,3 @@ You are free to use, modify, integrate, and distribute the project with strong p
 See the [`LICENSE`](./LICENSE) file for more information.
 
 ```
-
----
-
-
-¿Cuál quieres que salga primero?
-```
