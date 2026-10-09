@@ -49,5 +49,15 @@ def test_ensure_db_initialized_logs_on_error(tmp_path, monkeypatch, caplog):
     with pytest.raises(RuntimeError):
         db.ensure_db_initialized()
 
-    assert any("Failed to initialize database" in message for message in caplog.messages)
-    assert not db_path.exists()
+    assert any("Database initialization failed" in message for message in caplog.messages)
+    # A failed bootstrap can already contain partially applied SQL. Preserve it
+    # for inspection instead of deleting it, and refuse to reset it on restart.
+    assert db_path.exists()
+    original = db_path.read_bytes()
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute(
+            "SELECT name FROM sqlite_master WHERE name = 'broken'"
+        ).fetchone() == ("broken",)
+    with pytest.raises(RuntimeError, match="preserved"):
+        db.ensure_db_initialized()
+    assert db_path.read_bytes() == original
