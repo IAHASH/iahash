@@ -30,7 +30,7 @@ La siguiente sesión debe leer este archivo y las PR antes de crear tareas.
 
 | PR | Rama / commit de referencia | Implementado | Probado | Revisado | Fusionado | Desplegado |
 | --- | --- | --- | --- | --- | --- | --- |
-| [40](https://github.com/IAHASH/iahash/pull/40) | audit/independent-sealing-baseline-20261009; base documental anterior 60569a16b42b16a5e2f7ba682f6aa8f61d7862f3 | Contrato/ADR/auditoría/estado y vectores, sin protocolo nuevo | Vector histórico local PASS; CI de esta entrega pendiente al publicarla | Revisión técnica del contrato; aprobación humana pendiente | No | No |
+| [40](https://github.com/IAHASH/iahash/pull/40) | audit/independent-sealing-baseline-20261009; base documental anterior 60569a16b42b16a5e2f7ba682f6aa8f61d7862f3 | Contrato/ADR/auditoría/estado y vectores, sin protocolo nuevo | Vector local y CI Ubuntu PASS en 1953213e650ceae52db0d13fab6ed9ef946827a0 | Revisión técnica del contrato; aprobación humana pendiente | No | No |
 | [41](https://github.com/IAHASH/iahash/pull/41) | fix/preserve-db-and-issuer-keys@06f01372b2c1ced21f46f85de7ca7530d507bfb5 | Preservación SQLite y claves + regresión | 25 locales; 25 en Ubuntu + shell PASS | Worker QA y coordinador; revisión humana pendiente | No | No |
 | [39](https://github.com/IAHASH/iahash/pull/39) | v2@117e035571d3df864957161780a42281289673ac | Transición histórica principalmente documental | No ejecutada en esta campaña | Inspección estática; conflictos observados | No | No |
 
@@ -55,7 +55,10 @@ Backup/restore probado con SQLite sintético, sin sistema de copias productivo.
 Vectores históricos: `python tools/verify_legacy_vectors.py`, PASS local;
 normalización, firma del hex, manipulaciones, clave incorrecta y ambigüedad
 `|`. JSON público: `docs/vectors/legacy-v1.2.json`, semilla pública de prueba.
-La CI de PR40 debe confirmar esos mismos bytes, sin implementar formato nuevo.
+[CI de vectores PR40](https://github.com/IAHASH/iahash/actions/runs/37999715192/job/114054541559)
+en `1953213e650ceae52db0d13fab6ed9ef946827a0`: **success**. Esta actualización
+documental posterior registra el resultado; no cambia el script ni los vectores.
+Ninguna implementación de formato nuevo.
 
 ## Bloqueos y riesgos abiertos
 

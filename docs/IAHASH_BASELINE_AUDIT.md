@@ -92,6 +92,8 @@ también el logo binario original y se verificó su blob Git
    firma/mensaje alterados, clave incorrecta y digest binario rechazados.
    Reproduce misma firma bajo dos distribuciones de model/timestamp con `|`.
    Semilla pública RFC8032 de pruebas, nunca identidad operativa.
+   [CI Ubuntu de vectores](https://github.com/IAHASH/iahash/actions/runs/37999715192/job/114054541559)
+   superada en `1953213e650ceae52db0d13fab6ed9ef946827a0`.
 
 Dependencias directas observadas en ejecución: FastAPI 0.143.0, Starlette
 1.7.0, cryptography 50.0.2, Pydantic 2.14.0, pytest 9.1.1, httpx 0.28.1,
