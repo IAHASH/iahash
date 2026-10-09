@@ -34,54 +34,30 @@ def ensure_db_initialized() -> None:
     """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    needs_bootstrap = not DB_PATH.exists() or DB_PATH.stat().st_size == 0
-
+    existed = DB_PATH.exists()
+    if existed and DB_PATH.stat().st_size == 0:
+        raise RuntimeError("Existing database is empty; refusing destructive reinitialization")
     if not SCHEMA_PATH.exists():
         raise FileNotFoundError(f"Schema file missing: {SCHEMA_PATH}")
-
     conn: Optional[sqlite3.Connection] = None
-
     try:
-        if needs_bootstrap:
-            conn = sqlite3.connect(str(DB_PATH))
-        else:
-            try:
-                conn = sqlite3.connect(str(DB_PATH))
-                cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-                existing_tables = {row[0] for row in cur.fetchall()}
-                needs_bootstrap = not {"prompts", "iahash_documents"}.issubset(
-                    existing_tables
-                )
-            except Exception:
-                if conn:
-                    conn.close()
-                raise
-
-        if needs_bootstrap and DB_PATH.exists():
-            conn.close()
-            DB_PATH.unlink(missing_ok=True)
-            conn = sqlite3.connect(str(DB_PATH))
-
-        if conn is None:
-            raise RuntimeError("Database connection could not be established")
-
-        _apply_schema(conn, bootstrap=needs_bootstrap)
+        conn = sqlite3.connect(str(DB_PATH))
+        tables = {row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if existed and not {"prompts", "iahash_documents"}.issubset(tables):
+            raise RuntimeError("Unexpected existing schema; manual migration required")
+        _apply_schema(conn, bootstrap=not existed)
         _load_seed_data(conn)
         conn.commit()
     except Exception as exc:
-        logger.exception("Failed to initialize database at %s", DB_PATH)
-        if DB_PATH.exists():
-            try:
-                DB_PATH.unlink()
-            except OSError:
-                logger.warning("Could not clean up partial database at %s", DB_PATH)
-        raise RuntimeError("Failed to initialize database") from exc
+        logger.exception("Database initialization failed at %s", DB_PATH)
+        if conn is not None:
+            conn.rollback()
+        raise RuntimeError("Database initialization failed; file preserved") from exc
     finally:
-        try:
-            if conn:
-                conn.close()
-        except Exception:
-            pass
+        if conn is not None:
+            conn.close()
 
 
 def get_connection() -> sqlite3.Connection:
