@@ -110,7 +110,7 @@ remoto; no trasladar una CI verde de otro commit. CI en
 **success**, logs: 25 passed en 4.36 s y `sh -n start.sh` superado. POSIX y
 shell se validaron en ese job Ubuntu, no localmente en Windows.
 
-## Próximas acciones y revisión
+## Próximas acciones y revisión al cerrar la auditoría inicial
 
 1. Aprobar o ajustar D1/D2/D3 del contrato propuesto; cambios de protocolo
    bloqueados por G1. No hace falta decidir producción para pruebas LAB.
@@ -123,3 +123,8 @@ shell se validaron en ese job Ubuntu, no localmente en Windows.
 No se han verificado proveedores remotos actuales, explotación SSRF,
 compatibilidad de todos los certificados históricos, rendimiento, Docker,
 volúmenes reales ni un servicio desplegado. No afirmar MVP completado.
+
+Actualización2026-10-10: D1/D2/D3 aprobadas para desarrollo; Sobremesa es el
+hostname de Torre Cabral, confirmado por el propietario. La referencia aislada
+Core/Server/Client y sus pruebas posteriores se registran en IAHASH_CAMPAIGN.md.
+Este inventario de fallos históricos conserva su alcance y resultados iniciales.

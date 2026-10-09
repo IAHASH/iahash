@@ -1,6 +1,10 @@
 # IA-HASH — Contrato canónico del producto
 
-Estado: **PROPUESTA PARA APROBACIÓN; NO IMPLEMENTADA**. Fecha: 2026-10-10.
+Estado: **APROBADO PARA DESARROLLO; REFERENCIA LAB VALIDADA EN PR42–44**. Fecha: 2026-10-10.
+El propietario aceptó el contrato indicando que lo único que cambiaría era
+la coordinación: al menos tres workers en Torre Cabral y ampliación a seis
+o los necesarios si existe capacidad y trabajo independiente. Esa modificación
+se incorpora a la campaña; no altera los bytes ni garantías del contrato.
 Repositorio: `IAHASH/iahash`. Base auditada: `v1.2`, commit
 `96922745e9062b752c163420d4274215f5a6b3ab`. Este documento separa hechos
 históricos de reglas propuestas. Aprobar este contrato no equivale a aprobar
@@ -359,16 +363,23 @@ Cada requisito necesita prueba positiva y negativa reproducible:
 | Operación | Docker LAB, persistencia, restore y rollback documentados y ensayados |
 
 **Gate G1:** D1/D2/D3 y este contrato aprobados antes de cambios de protocolo.
+G1 satisfecho por la respuesta del propietario de 2026-10-10, con la única
+modificación de concurrencia descrita al comienzo. No autoriza merge ni
+despliegues públicos. Los apartados titulados «propuestos» describen la
+especificación ahora aprobada para implementar, no funcionalidad terminada.
 Mientras tanto: auditorías, vectores históricos, regresiones y correcciones
 compatibles de preservación en PR #41. No declarar el MVP terminado por una
 PR creada ni por una suite parcial verde. Registrar por separado implementado,
 probado, revisado, fusionado y desplegado.
 
-## 16. Decisiones humanas pendientes
+## 16. Decisiones adoptadas y límites pendientes
 
 Consultar `IAHASH_DECISIONS.md` para alternativas A/B/C y recomendación.
-D1: garantías/formato nuevo, perfiles y política de lectura histórica.
-D2: identidad y confianza por entorno, inicialización/rotación y acceso LAB.
-D3: conservación de recibos, metadatos y copias, sin borrado histórico.
+D1 aprobada: garantías/formato nuevo, perfiles y política de lectura histórica.
+D2 aprobada para LAB: identidad y confianza por entorno, inicialización y acceso.
+D3 aprobada para LAB: conservación mínima y copias, sin purga ni borrado histórico.
+Identidades operativas, rotación/retención de producción y exposición pública
+siguen pendientes de decisiones separadas. Implementación/evidencia de esta
+referencia: `IAHASH_CAMPAIGN.md`; no confundir aprobación con despliegue.
 Licencia Apache-2.0 existente se conserva; costes e infraestructura pública
 no se modifican. Cualquier cambio posterior en ellos requiere autorización.

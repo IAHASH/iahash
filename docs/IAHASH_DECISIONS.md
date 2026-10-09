@@ -1,6 +1,6 @@
-# IA-HASH — Decisiones para aprobar el contrato
+# IA-HASH — Decisiones del contrato
 
-Estado: propuestas pendientes. Fecha: 2026-10-10. Responsable de aprobación:
+Estado: recomendaciones B aprobadas para desarrollo. Fecha: 2026-10-10. Responsable de aprobación:
 propietario humano del proyecto. Aprobar requiere respuesta explícita; el
 silencio no aprueba. Referencia: `IAHASH_PRODUCT_CONTRACT.md`.
 
@@ -19,9 +19,8 @@ El servidor nuevo certifica recepción de huellas (`HASH_RECEIPT`), sin afirmar
 procedencia ni autoridad temporal independiente. Texto normalizado conserva
 reglas observadas; binario conserva bytes exactos.
 
-Decisión solicitada: aprobar B y la cobertura/perfiles propuestos, o señalar
-qué garantía/formato debe cambiar antes de implementar. No se solicita
-autorización para fusionar PR ni para modificar certificados históricos.
+Decisión adoptada: B y la cobertura/perfiles definidos, aprobados para desarrollo.
+No autoriza fusionar PR ni modificar certificados históricos.
 
 ## D2 — Identidad, claves y confianza por entorno
 
@@ -37,7 +36,7 @@ desde privada. Conservar públicas históricas. Revocación no implica prueba
 de cuándo fue emitido un recibo. Rotación requiere autorización operativa.
 Token LAB para emisión/consulta/verificación; no cuentas públicas.
 
-Decisión solicitada: aprobar este modelo LAB. El identificador y las claves
+Decisión adoptada: modelo LAB B. El identificador y las claves
 reales del emisor se provisionarán después, mediante el operador, cuando
 exista autorización de operación; no son necesarios para pruebas efímeras.
 STAGING/PRODUCTION y su infraestructura siguen fuera de autorización.
@@ -55,7 +54,7 @@ destructiva. El contrato limita el almacenamiento nuevo; no autoriza eliminar
 raw histórico. No se fija retención de producción ni de backups sin decisión
 posterior. El ensayo LAB usará datos sintéticos y copias aisladas.
 
-Decisión solicitada: aprobar conservación mínima sin purga LAB. Si se desea
+Decisión adoptada: conservación mínima sin purga LAB. Si se desea
 TTL, definir antes el período, alcance de datos/copias y efectos sobre
 idempotencia y consulta; nunca inferirlo de un fallo de inicialización.
 
@@ -71,9 +70,12 @@ DNS, modificación de Maia o fusión automática.
 
 | Decisión | Estado | Evidencia |
 | --- | --- | --- |
-| D1 | PENDIENTE | Ninguna aprobación recibida |
-| D2 | PENDIENTE | Ninguna aprobación recibida |
-| D3 | PENDIENTE | Ninguna aprobación recibida |
+| D1 | APROBADA, alternativa B | Respuesta del propietario: «lo único que cambiaría» es la coordinación y concurrencia de workers |
+| D2 | APROBADA, alternativa B para LAB | Misma respuesta; sin identidad oficial ni autorización de producción |
+| D3 | APROBADA, alternativa B para LAB | Misma respuesta; sin borrado histórico ni política productiva nueva |
 
-Gate G1 permanece cerrado. Auditorías y correcciones compatibles de
-preservación pueden avanzar mediante PR revisables mientras se decide.
+Gate G1 satisfecho para desarrollo. La modificación aprobada permite empezar
+con al menos tres workers en Torre Cabral, ampliables a seis o más si hay
+capacidad real, tareas independientes y control de recursos. La sesión actual
+admite tres subagentes más coordinador; no se anuncia seis como ejecutados.
+Fusiones, despliegues públicos, costes y cambios en Maia siguen separados.

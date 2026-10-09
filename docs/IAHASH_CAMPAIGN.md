@@ -1,91 +1,88 @@
 # IA-HASH — Estado de campaña
 
-Actualizado: 2026-10-10 (Europe/Madrid). Coordinador: chat actual IA-HASH.
-Campaña existente continuada en PR40/41. Sin campaña/PR duplicada.
+Actualizado: 2026-10-10, Europe/Madrid. Sobremesa es Torre Cabral, confirmado
+por el propietario. Se ejecutaron tres workers locales concurrentes más el
+coordinador; archivos entregados y reservas liberadas. Detalle en
+IAHASH_WORKER_EXECUTION.md. No quedan workers residentes ni servicio publicado.
 
-## Objetivo y base
+## Contrato y alcance
 
-Objetivo actual: cerrar reconocimiento y preparar contrato canónico
-revisable; reforzar preservación compatible mientras se decide el protocolo.
-Base: `v1.2@96922745e9062b752c163420d4274215f5a6b3ab`.
-Contrato: `docs/IAHASH_PRODUCT_CONTRACT.md`, **propuesta no aprobada**.
-Decisiones: `docs/IAHASH_DECISIONS.md`, D1/D2/D3 pendientes.
-**G1 cerrado:** no implementar ni emitir el protocolo propuesto hasta aprobación.
+D1/D2/D3 aprobadas para desarrollo: G1 satisfecho. Única modificación humana:
+mínimo tres workers en Torre, ampliables a seis o más si es factible. La sesión
+admite tres workers más coordinador; no se ejecutaron seis. Contrato y decisiones:
+IAHASH_PRODUCT_CONTRACT.md e IAHASH_DECISIONS.md.
+Base auditada: v1.2@96922745e9062b752c163420d4274215f5a6b3ab.
 
-## Trabajo y propiedad
+Referencia implementada: Core offline, Server independiente durable, Client
+hash-only con cola, simulador sintético Maia, Docker no-root y backup/restore.
+Paquetes nuevos iahash_core/iahash_server/iahash_client; no importan legacy ni
+modifican Maia. La API histórica queda separada del nuevo servicio.
 
-| Propietario | Tarea | Estado | Reserva de archivos |
-| --- | --- | --- | --- |
-| Coordinador | Contrato, ADR, auditoría consolidada, estado y PR | Entrega para revisión humana | Ninguna reserva activa |
-| Worker Core/Architect | Bytes históricos, cobertura, vectores y revisión del contrato | Completado; vectores locales PASS | Liberada |
-| Worker Architect | API/DB/operación, historia main/v1/v2/PR39 | Auditoría estática completada | Liberada |
-| Worker Server/QA | Preservación, claves, overrides, carreras y regresión | 25 pruebas locales y CI PASS | Liberada |
+## Entregas y estados
 
-Workers activos al cerrar esta entrega: **0**. Máximo observado: 3 simultáneos.
-No workers o automatizaciones residentes. No archivos compartidos editados
-simultáneamente; coordinador publicó únicamente tras liberar reservas.
-La siguiente sesión debe leer este archivo y las PR antes de crear tareas.
+| PR / SHA probado | Implementado | Probado | Revisado | Fusionado / desplegado |
+| --- | --- | --- | --- | --- |
+| [40](https://github.com/IAHASH/iahash/pull/40) | Contrato, decisiones, auditoría, campaña y vectores históricos | Vector Ubuntu PASS en 1953213e650ceae52db0d13fab6ed9ef946827a0; posteriores commits documentales | Contrato aprobado para desarrollo; revisión final humana pendiente | No / No |
+| [41](https://github.com/IAHASH/iahash/pull/41) / 06f01372b2c1ced21f46f85de7ca7530d507bfb5 | Preservar SQLite/claves históricos | 25 locales y 25 Ubuntu, shell PASS | Worker QA/coordinador; revisión humana pendiente | No / No |
+| [42](https://github.com/IAHASH/iahash/pull/42) / 534972853651d3bc7715b6d4bc7bded6c6db86af | Core, vector PAIR-1, lector legacy limitado | 79 locales, 79 Windows y 79 Linux CI | Core/coordinador; revisión humana pendiente | No / No |
+| [43](https://github.com/IAHASH/iahash/pull/43) / 67965fd69afdcf2dcf50afe4c50eca42317899ee | Server, CLI, Docker, operaciones | 107 locales, 107 Windows y 107 Linux CI; Docker PASS | Server/Core/QA/coordinador; revisión humana pendiente | No / No |
+| [44](https://github.com/IAHASH/iahash/pull/44) / c944c8da9c5fce7aa8f3e4ffb209ed194315413e | Client, E2E, simulador y concurrencia | 181 locales, 181 Windows y 181 Linux CI; simulador/stress/Docker PASS | Client/Core/QA/coordinador; revisión humana pendiente | No / No |
 
-## PR y estados separados
+Todas son borradores. 42 tiene base v1.2; 43 tiene base42; 44 tiene base43.
+Revisar en ese orden; retargetear las siguientes después de decidir cada merge.
+PR41 sigue independiente, sin fusionar: la preservación de la DB nueva se
+implementó por separado. PR39/v2 sigue abierta/conflictiva; no sustituye esta
+referencia. No se duplicaron PR40/41 ni se creó otra campaña.
 
-| PR | Rama / commit de referencia | Implementado | Probado | Revisado | Fusionado | Desplegado |
-| --- | --- | --- | --- | --- | --- | --- |
-| [40](https://github.com/IAHASH/iahash/pull/40) | audit/independent-sealing-baseline-20261009; base documental anterior 60569a16b42b16a5e2f7ba682f6aa8f61d7862f3 | Contrato/ADR/auditoría/estado y vectores, sin protocolo nuevo | Vector local y CI Ubuntu PASS en 1953213e650ceae52db0d13fab6ed9ef946827a0 | Revisión técnica del contrato; aprobación humana pendiente | No | No |
-| [41](https://github.com/IAHASH/iahash/pull/41) | fix/preserve-db-and-issuer-keys@06f01372b2c1ced21f46f85de7ca7530d507bfb5 | Preservación SQLite y claves + regresión | 25 locales; 25 en Ubuntu + shell PASS | Worker QA y coordinador; revisión humana pendiente | No | No |
-| [39](https://github.com/IAHASH/iahash/pull/39) | v2@117e035571d3df864957161780a42281289673ac | Transición histórica principalmente documental | No ejecutada en esta campaña | Inspección estática; conflictos observados | No | No |
+## Evidencia
 
-PR terminadas/fusionadas por esta campaña: ninguna. Ambas entregas 40/41
-permanecen como borradores. No declarar un MVP por esta entrega documental.
-El commit propio de este archivo se obtiene del head actual de PR40; no se
-inserta una referencia circular a su hash dentro del mismo commit.
+- Core [CI38001423485](https://github.com/IAHASH/iahash/actions/runs/38001423485):
+  Windows job114060141736: 79 passed, 0.36s; Ubuntu114060141973: 79 passed, 0.38s.
+- Server [CI38001584086](https://github.com/IAHASH/iahash/actions/runs/38001584086):
+  Windows114060659846: 107 passed, 2.86s; Ubuntu114060660067: 107 passed, 1.28s;
+  Docker114060659713: build y ciclo de vida/restore PASS.
+- Integrado [CI38001741367](https://github.com/IAHASH/iahash/actions/runs/38001741367):
+  Windows114061179129: 181 passed, 10.64s; Ubuntu114061179054: 181 passed, 2.63s;
+  ambos simulador y stress PASS; Docker114061178868 PASS.
+- Torre local: 181 passed, 8.89s, XML lab-results/reference-final-windows.xml;
+  ensayo lab-results/torre-cabral-recovered.json. No se subieron DB, privadas ni
+  tokens. CI conserva XML y JSON como artifacts.
+- PR41 [CI37999377119](https://github.com/IAHASH/iahash/actions/runs/37999377119/job/114053441814):
+  25 passed, 4.36s y sh -n start.sh. Vector histórico
+  [CI37999715192](https://github.com/IAHASH/iahash/actions/runs/37999715192/job/114054541559).
 
-## Evidencia de pruebas
+Suite nueva181 = 79 Core + 24 Server + 70 Client + 4 operaciones + 2 E2E + 2 stress.
+Una advertencia Starlette/httpx queda para seguimiento de dependencias. No se
+ocultaron fallos históricos: colección aborta por _collect_messages ausente;
+resto 26 passed / 9 failed / 3 skipped. IAHASH_BASELINE_AUDIT.md conserva detalle.
+La suite nueva verde no declara sano el servicio legado completo.
 
-Baseline oficial: colección abortada en test_chatgpt_share_parsing por
-`_collect_messages` ausente; tres módulos saltados. Ejecución del resto:
-**26 passed, 9 failed, 3 skipped** en Windows/Python3.12. Detalle y versiones:
-`docs/IAHASH_BASELINE_AUDIT.md`. No confundir con regresiones introducidas.
+## Revisión cruzada y concurrencia
 
-PR41 exacta: 25 pruebas locales PASS (9.07 s en revisión coordinador).
-[CI Ubuntu](https://github.com/IAHASH/iahash/actions/runs/37999377119/job/114053441814)
-en `06f01372`: **25 passed (4.36 s)**, permisos POSIX y sintaxis shell
-superados. Migra preservando evidencia, sin garantía de DDL atómico.
-Backup/restore probado con SQLite sintético, sin sistema de copias productivo.
+Corregidos antes de publicar: SQLite sin cierre en Windows; conexión de backup
+filtrada al fallar destino; Retry-After sin persistir en último intento; respuesta
+HTTP descargada antes del límite; ensayo que declaraba PASS sin emitir recibos.
+Las regresiones ahora comprueban esos fallos efectivos.
 
-Vectores históricos: `python tools/verify_legacy_vectors.py`, PASS local;
-normalización, firma del hex, manipulaciones, clave incorrecta y ambigüedad
-`|`. JSON público: `docs/vectors/legacy-v1.2.json`, semilla pública de prueba.
-[CI de vectores PR40](https://github.com/IAHASH/iahash/actions/runs/37999715192/job/114054541559)
-en `1953213e650ceae52db0d13fab6ed9ef946827a0`: **success**. Esta actualización
-documental posterior registra el resultado; no cambia el script ni los vectores.
-Ninguna implementación de formato nuevo.
+Cada ensayo local1/3/6 usa 12 pares, 24 llamadas de onda y 24 de recuperación.
+Siempre termina con 12 recibos únicos, firmas válidas, integridad e idéntico
+replay. Onda local6: 5 nuevas/19 respuestas429; recuperación final12/12.
+No es benchmark productivo ni mide agentes. El límite de cuatro escrituras se
+conserva; ampliar workers no elimina ese límite.
 
-## Bloqueos y riesgos abiertos
+## Pendiente
 
-- Aprobación humana D1 (nuevo formato/compatibilidad), D2 (identidad/confianza
-  LAB), D3 (retención mínima sin purga LAB). El mandato adjunto exige este gate.
-- SSRF y confianza en emisor, auth/límites/privacidad de rutas históricas.
-- Colección y nueve fallos históricos; inventario de certificados reales
-  todavía insuficiente para prometer compatibilidad total.
-- Migraciones DDL pueden quedar parcialmente aplicadas; no borrar ni
-  reintentar con reinicialización automática. Claves antiguas deben conservarse.
-- Core aislado, servidor idempotente, cliente durable, Docker/restore y
-  simulación Maia aún no implementados como MVP nuevo ni aprobados para operación.
+1. Revisión humana de40/41/42/43/44; sin merge ni despliegue automático.
+2. Ejecutar el SHA de44 en Work Cloud desde ChatGPT de Torre y en WinWork desde
+   portátil/fábrica, según aclaración del propietario. Aún no ejecutados. Paquete:
+   IAHASH_ENVIRONMENT_HANDOFF.md.
+3. Prueba distribuida contra Torre requiere conexión/endpoint LAB y límites
+   identificados. El harness actual es local sintético y no acepta URL externa.
+4. Antes de operación pública: resolver exposición/auth/SSRF del legado o mantener
+   aislamiento, decidir identidad operativa, retención y TLS. No se probaron
+   proveedores reales ni compatibilidad de todos los certificados históricos.
 
-## Cola siguiente, sin tareas duplicadas
-
-| Orden | Tarea concreta | Propietario | Depende de |
-| --- | --- | --- | --- |
-| 1 | Revisar/decidir D1–D3 sobre contrato exacto | Humano + Coordinador | Entrega PR40 |
-| 2 | Revisar preservación/CI y decidir merge de PR41 | Humano + QA | No depende de cambio de protocolo |
-| 3 | Congelar fixtures por formatos históricos e investigar parser/tests divergentes | Worker Core/QA | Puede continuar sin G1; PR separada pequeña |
-| 4 | Tests simulados SSRF/trust/privacidad y corrección compatible acordada | Worker Server/QA | No requiere producción; revisar cambios de acceso |
-| 5 | Core offline conforme y vectores nuevos | Worker Core | G1 aprobado |
-| 6 | Transacción/idempotencia/recuperación Server | Worker Server | Core y contrato aprobados |
-| 7 | Cliente Python durable + simulador Maia | Worker Client/QA | API aprobada, sin tocar Maia |
-| 8 | Docker LAB, backups/restore/rollback y validación completa | Worker Server/QA | MVP probado; autorización de operación separada |
-
-Sin autorización de producción, DNS, costes, secretos operativos, Maia ni
-merge automático. Revertir documentación retirando los archivos de propuesta;
-revertir código conserva registros y claves y no recupera garantías perdidas
-por volver a código destructivo. No hay despliegue que revertir aquí.
+La referencia mínima es un candidato LAB implementado y validado. No declara
+terminado el ensayo WinWork/Work Cloud, la seguridad del legado, la integración
+real Maia ni una operación productiva. El siguiente coordinador debe leer este
+estado y heads/CI antes de crear trabajo, evitando duplicados.
