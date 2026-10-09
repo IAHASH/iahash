@@ -1,0 +1,11 @@
+.git
+**/__pycache__
+.pytest_cache
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.sqlite*
+**/*.private
+**/*.pem
+**/.env
+lab-results

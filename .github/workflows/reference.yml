@@ -19,10 +19,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -c constraints-reference.txt ".[test]"
+      - run: python -m pip install -c constraints-reference.txt ".[server,client,test]"
       - run: python -m pytest -q reference_tests --junitxml=reference-results.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: reference-tests-${{ matrix.os }}
           path: reference-results.xml
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: docker build -f Dockerfile.reference -t iahash-reference:ci .
+      - run: python tools/docker_reference_smoke.py --image iahash-reference:ci
