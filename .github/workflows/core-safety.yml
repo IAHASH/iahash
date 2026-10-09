@@ -1,0 +1,36 @@
+name: Core safety tests
+
+on:
+  pull_request:
+    paths:
+      - "iahash/db.py"
+      - "iahash/crypto.py"
+      - "start.sh"
+      - "tests/test_registry_preservation.py"
+      - "tests/test_key_preservation.py"
+      - "tests/test_db_init.py"
+      - "tests/conftest.py"
+      - "db/schema.sql"
+      - "db/seed_prompts.sql"
+      - "requirements.txt"
+      - ".github/workflows/core-safety.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run persistence and issuer identity regression tests
+        run: python -m pytest -q tests/test_db_init.py tests/test_registry_preservation.py tests/test_key_preservation.py
+      - name: Shell syntax check
+        run: sh -n start.sh
