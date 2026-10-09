@@ -1,0 +1,27 @@
+name: Historical crypto vectors
+
+on:
+  pull_request:
+    paths:
+      - "iahash/crypto.py"
+      - "docs/vectors/legacy-v1.2.json"
+      - "tools/verify_legacy_vectors.py"
+      - ".github/workflows/legacy-vectors.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vectors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install crypto dependency
+        run: python -m pip install cryptography==50.0.2
+      - name: Verify frozen historical vectors
+        run: python tools/verify_legacy_vectors.py
