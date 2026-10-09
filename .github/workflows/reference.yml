@@ -21,11 +21,15 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -c constraints-reference.txt ".[server,client,test]"
       - run: python -m pytest -q reference_tests --junitxml=reference-results.xml
+      - run: python tools/maia_simulator.py
+      - run: python tools/lab_stress.py --output stress-results.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: reference-tests-${{ matrix.os }}
-          path: reference-results.xml
+          path: |
+            reference-results.xml
+            stress-results.json
   container:
     runs-on: ubuntu-latest
     timeout-minutes: 10
