@@ -1,0 +1,114 @@
+{
+  "warning": "PUBLIC TEST SEED ONLY. Never use this private seed for LAB/STAGING/PRODUCTION issuance.",
+  "format": "IAHASH-1.2 historical crypto vectors; not a new protocol implementation",
+  "source": {
+    "repository": "IAHASH/iahash",
+    "branch": "v1.2",
+    "commit": "96922745e9062b752c163420d4274215f5a6b3ab",
+    "file": "iahash/crypto.py"
+  },
+  "unicode_database": "15.0.0",
+  "public_test_seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+  "public_key_raw_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+  "normalization": [
+    {
+      "input": null,
+      "normalized": "",
+      "utf8_hex": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "input": "",
+      "normalized": "",
+      "utf8_hex": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "input": "Cafe\u0301 \t\r\nsegunda\r\n\t\n",
+      "normalized": "Caf\u00e9\nsegunda",
+      "utf8_hex": "436166c3a90a736567756e6461",
+      "sha256": "64d5495c55faf387082751b6c052adbcd7a65af84dc94c5e2ecf54854a379aba"
+    },
+    {
+      "input": "A\u00a0\n",
+      "normalized": "A\u00a0",
+      "utf8_hex": "41c2a0",
+      "sha256": "30b03fce886d4097993e129d952e9d1066d37865f8ae427517fbccbb17109d3c"
+    },
+    {
+      "input": "\nA\n\n",
+      "normalized": "\nA",
+      "utf8_hex": "0a41",
+      "sha256": "c33d69d1d671e747e91b756fbe21d43c938beca7bf27c72a068286e32e98325e"
+    }
+  ],
+  "unicode_pair": {
+    "prompt": "Cafe\u0301 \t\r\nsegunda\r\n\t\n",
+    "response": "Re\u0301ponse\r\nOK\t\n\n",
+    "protocol_version": "IAHASH-1.2",
+    "prompt_id": null,
+    "model": "test-model",
+    "timestamp": "2026-10-10T12:00:00Z",
+    "h_prompt": "64d5495c55faf387082751b6c052adbcd7a65af84dc94c5e2ecf54854a379aba",
+    "h_response": "9845bab79d8be59614cdeb1a63ad644c8cb52a491b433edf1890c2540a9373da",
+    "h_total_preimage": "IAHASH-1.2||64d5495c55faf387082751b6c052adbcd7a65af84dc94c5e2ecf54854a379aba|9845bab79d8be59614cdeb1a63ad644c8cb52a491b433edf1890c2540a9373da|test-model|2026-10-10T12:00:00Z",
+    "h_total": "3db589ac63d4f179d5a8595abe2521def021c8cf06eb6b7e5f7c6e41cb5a0e9b",
+    "signed_message_utf8_hex": "33646235383961633633643466313739643561383539356162653235323164656630323163386366303665623662376535663763366534316362356130653962",
+    "signature_hex": "5d0ce9250baef086de3f691188246b26c2169dc695d18cbcc0e143009618eb78c57747ef3757a03f298801b5b4ebb98b00ee1b6a0c512007281520bbfac49f0c",
+    "iah_id": "EfUeLmwrym5tN1Tw",
+    "checks": {
+      "valid_signature": true,
+      "altered_signature_rejected": true,
+      "altered_message_rejected": true,
+      "wrong_key_rejected": true,
+      "binary_digest_as_message_rejected": true
+    }
+  },
+  "delimiter_ambiguity": {
+    "first": {
+      "prompt": "A",
+      "response": "B",
+      "protocol_version": "IAHASH-1.2",
+      "prompt_id": null,
+      "model": "gpt-x|extra",
+      "timestamp": "2026-10-10T12:00:00Z",
+      "h_prompt": "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd",
+      "h_response": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+      "h_total_preimage": "IAHASH-1.2||559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd|df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c|gpt-x|extra|2026-10-10T12:00:00Z",
+      "h_total": "f12049a1b68ef4b46040384f1c2e877796f35cc865cc85b33e476aea9a073a00",
+      "signed_message_utf8_hex": "66313230343961316236386566346234363034303338346631633265383737373936663335636338363563633835623333653437366165613961303733613030",
+      "signature_hex": "5eb0ee8f418fe0c577c7119a55d93766d2b0deea584c431843192c347f2eefdf7419629f4eb5646cfb547fb4119702e6bc9d0ed435f65143f7aecc2be8506805",
+      "iah_id": "644tCxbwWfCLxt25",
+      "checks": {
+        "valid_signature": true,
+        "altered_signature_rejected": true,
+        "altered_message_rejected": true,
+        "wrong_key_rejected": true,
+        "binary_digest_as_message_rejected": true
+      }
+    },
+    "second": {
+      "prompt": "A",
+      "response": "B",
+      "protocol_version": "IAHASH-1.2",
+      "prompt_id": null,
+      "model": "gpt-x",
+      "timestamp": "extra|2026-10-10T12:00:00Z",
+      "h_prompt": "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd",
+      "h_response": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+      "h_total_preimage": "IAHASH-1.2||559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd|df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c|gpt-x|extra|2026-10-10T12:00:00Z",
+      "h_total": "f12049a1b68ef4b46040384f1c2e877796f35cc865cc85b33e476aea9a073a00",
+      "signed_message_utf8_hex": "66313230343961316236386566346234363034303338346631633265383737373936663335636338363563633835623333653437366165613961303733613030",
+      "signature_hex": "5eb0ee8f418fe0c577c7119a55d93766d2b0deea584c431843192c347f2eefdf7419629f4eb5646cfb547fb4119702e6bc9d0ed435f65143f7aecc2be8506805",
+      "iah_id": "644tCxbwWfCLxt25",
+      "checks": {
+        "valid_signature": true,
+        "altered_signature_rejected": true,
+        "altered_message_rejected": true,
+        "wrong_key_rejected": true,
+        "binary_digest_as_message_rejected": true
+      }
+    },
+    "same_signed_message_and_signature": true
+  }
+}
