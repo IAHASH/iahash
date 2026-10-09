@@ -28,43 +28,38 @@ mkdir -p "$DB_DIR"
 # GENERACIÓN DE CLAVES (solo si no existen)
 # ---------------------------------------------------------------------------
 
-if [ ! -f "$KEY_DIR/issuer_ed25519.private" ] || [ ! -f "$KEY_DIR/issuer_ed25519.pub" ]; then
-  echo "[IA-HASH] No keypair found. Generating Ed25519 keypair..."
-
-  python3 - <<'PY'
+python3 - <<'PY'
+import os
 from pathlib import Path
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-key_dir = Path("/data/keys")
-key_dir.mkdir(parents=True, exist_ok=True)
-
-priv = key_dir / "issuer_ed25519.private"
-pub = key_dir / "issuer_ed25519.pub"
-
-private_key = Ed25519PrivateKey.generate()
-priv.write_bytes(
-    private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-)
-
-public_key = private_key.public_key()
-pub.write_bytes(
-    public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-)
-
-print(f"[IA-HASH] Keys generated at: {key_dir}")
+root = Path("/data/keys")
+private_path = root / "issuer_ed25519.private"
+public_path = root / "issuer_ed25519.pub"
+if not private_path.exists():
+    if public_path.exists():
+        raise SystemExit("Private key missing: refusing to replace issuer identity")
+    if os.getenv("IAHASH_ALLOW_KEY_INITIALIZATION") != "1":
+        raise SystemExit("Explicit IAHASH_ALLOW_KEY_INITIALIZATION=1 required")
+    key = Ed25519PrivateKey.generate()
+    private_path.write_bytes(key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption()))
+else:
+    key = serialization.load_pem_private_key(private_path.read_bytes(), password=None)
+    if not isinstance(key, Ed25519PrivateKey):
+        raise SystemExit("Issuer private key is not Ed25519")
+private_path.chmod(0o600)
+expected = key.public_key().public_bytes(
+    serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+if public_path.exists() and public_path.read_bytes() != expected:
+    raise SystemExit("Issuer public/private keys mismatch")
+if not public_path.exists():
+    public_path.write_bytes(expected)
+public_path.chmod(0o644)
+print("[IA-HASH] Issuer identity validated")
 PY
-
-else
-  echo "[IA-HASH] Existing keys found. Skipping generation."
-fi
 
 # ---------------------------------------------------------------------------
 # BASE DE DATOS SQLITE (sin binario externo)
