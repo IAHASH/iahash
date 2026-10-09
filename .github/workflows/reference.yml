@@ -1,0 +1,28 @@
+name: Reference protocol
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -c constraints-reference.txt ".[test]"
+      - run: python -m pytest -q reference_tests --junitxml=reference-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reference-tests-${{ matrix.os }}
+          path: reference-results.xml
